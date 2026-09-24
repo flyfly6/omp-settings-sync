@@ -144,23 +144,30 @@ export default function gitSyncExtension(pi: ExtensionAPI) {
       typeof event === "object" && event && "reason" in event && typeof event.reason === "string"
         ? event.reason
         : undefined;
-    if (reason === "reload" || isSubagentChild() || !(await isSyncableRepo())) return;
+    if (reason === "reload" || isSubagentChild()) return;
 
-    try {
-      await withLock(ctx, async () => {
-        await prepareCommit(undefined, ctx);
-        await commitLocalChanges(undefined, undefined, ctx);
-        const dir = dirOf();
-        const upstream = await upstreamRef(dir);
-        if (!upstream) {
-          await pushOrigin(true, dir);
-        } else {
-          const { ahead, behind } = await countAheadBehind(upstream, dir);
-          if (ahead > 0 && behind === 0) {
-            await pushOrigin(false, dir);
+    // Hosts may cap session_shutdown handlers far below the cost of a git round trip
+    // (omp: 2s, while commit+push takes seconds). Run the whole exit sync detached:
+    // the pending git child keeps the process alive, and anything not pushed here is
+    // retried by the next session start and by the interval tick.
+    void (async () => {
+      try {
+        if (!(await isSyncableRepo())) return;
+        await withLock(ctx, async () => {
+          await prepareCommit(undefined, ctx);
+          await commitLocalChanges(undefined, undefined, ctx);
+          const dir = dirOf();
+          const upstream = await upstreamRef(dir);
+          if (!upstream) {
+            await pushOrigin(true, dir);
+          } else {
+            const { ahead, behind } = await countAheadBehind(upstream, dir);
+            if (ahead > 0 && behind === 0) {
+              await pushOrigin(false, dir);
+            }
           }
-        }
-      });
-    } catch {}
+        });
+      } catch {}
+    })();
   });
 }
