@@ -37,3 +37,32 @@ test("readConfig parses JSONC with comments and validates safe extraPaths and ma
   assert.deepEqual(config.extraPaths, ["safe-dir", "custom/path"]);
   assert.deepEqual(config.machineLocalSettings, ["setupVersion", "dev.autoqaConsent"]);
 });
+
+test("readConfig tolerates trailing commas and reports config files it cannot parse", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-config-lenient-"));
+  const warnings: string[] = [];
+  const notify = (message: string, level: string) => warnings.push(`${level}: ${message}`);
+
+  await fs.writeFile(
+    path.join(tempDir, "omp-sync.jsonc"),
+    `{\n  "autoSyncIntervalMinutes": 5,\n  "extraPaths": ["models.yml"],\n}\n`
+  );
+  const lenient = await readConfig({ dir: tempDir, notify });
+  assert.equal(lenient.autoSyncIntervalMinutes, 5);
+  assert.deepEqual(lenient.extraPaths, ["models.yml"]);
+  assert.equal(warnings.length, 1, "a trailing comma must be reported, not silently ignored");
+
+  await fs.writeFile(
+    path.join(tempDir, "omp-sync.jsonc"),
+    `{\n  "extraPaths": ["a{b,c"],\n  "machineLocalSettings": ["x,}", "setupVersion"]\n}\n`
+  );
+  const tricky = await readConfig({ dir: tempDir, notify });
+  assert.deepEqual(tricky.extraPaths, ["a{b,c"]);
+  assert.deepEqual(tricky.machineLocalSettings, ["x,}", "setupVersion"]);
+
+  const warningsBeforeBroken = warnings.length;
+  await fs.writeFile(path.join(tempDir, "omp-sync.jsonc"), "{ this is not json ");
+  const broken = await readConfig({ dir: tempDir, notify });
+  assert.deepEqual(broken, {});
+  assert.equal(warnings.length, warningsBeforeBroken + 1, "an unparsable config must be reported");
+});

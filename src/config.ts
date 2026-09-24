@@ -129,36 +129,86 @@ export async function readConfigFile(dir: string): Promise<string | undefined> {
   return undefined;
 }
 
+const warnedConfigIssues = new Set<string>();
+
+function warnConfigIssue(deps: Deps | undefined, ctx: Ctx, message: string): void {
+  if (warnedConfigIssues.has(message)) return;
+  warnedConfigIssues.add(message);
+  if (deps?.notify) deps.notify(message, "warning");
+  else if (ctx?.hasUI && ctx.ui) ctx.ui.notify(message, "warning");
+  else if (!ctx) process.stderr.write(`${message}\n`);
+}
+
+/** JSONC permits trailing commas, plain JSON does not: drop commas that precede `}` or `]`. */
+export function stripTrailingCommas(input: string): string {
+  let out = "";
+  let quote = "";
+  let escaped = false;
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i]!;
+    if (quote) {
+      out += c;
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      out += c;
+      continue;
+    }
+    if (c === ",") {
+      let j = i + 1;
+      while (j < input.length && /\s/.test(input[j]!)) j++;
+      const next = input[j];
+      if (next === "}" || next === "]") continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
 export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig> {
   const dir = dirOf(deps);
   const rawText = await readConfigFile(dir);
   if (!rawText) return {};
 
+  const cleaned = stripJsonComments(rawText);
+  let raw: OmpSyncConfig;
   try {
-    const raw = JSON.parse(stripJsonComments(rawText)) as OmpSyncConfig;
-    const extras = (raw.extraPaths ?? []).filter(isValidExtraPath);
-
-    let machineLocalSettings: string[] | undefined;
-    if (Array.isArray(raw.machineLocalSettings)) {
-      machineLocalSettings = raw.machineLocalSettings.filter(
-        (key): key is string => typeof key === "string" && key.trim() !== ""
-      );
+    raw = JSON.parse(cleaned) as OmpSyncConfig;
+  } catch (strictError) {
+    try {
+      raw = JSON.parse(stripTrailingCommas(cleaned)) as OmpSyncConfig;
+      warnConfigIssue(deps, ctx, "omp-sync: config file has a trailing comma; parsed leniently");
+    } catch {
+      const reason = strictError instanceof Error ? strictError.message : String(strictError);
+      warnConfigIssue(deps, ctx, `omp-sync: ignoring unparsable config file (${reason})`);
+      return {};
     }
-
-    let machineLocalYamlKeys: string[] | undefined;
-    if (Array.isArray(raw.machineLocalYamlKeys)) {
-      machineLocalYamlKeys = raw.machineLocalYamlKeys.filter(
-        (key): key is string => typeof key === "string" && key.trim() !== ""
-      );
-    }
-
-    return {
-      ...raw,
-      extraPaths: extras,
-      machineLocalSettings,
-      machineLocalYamlKeys,
-    };
-  } catch {
-    return {};
   }
+
+  const extras = (raw.extraPaths ?? []).filter(isValidExtraPath);
+
+  let machineLocalSettings: string[] | undefined;
+  if (Array.isArray(raw.machineLocalSettings)) {
+    machineLocalSettings = raw.machineLocalSettings.filter(
+      (key): key is string => typeof key === "string" && key.trim() !== ""
+    );
+  }
+
+  let machineLocalYamlKeys: string[] | undefined;
+  if (Array.isArray(raw.machineLocalYamlKeys)) {
+    machineLocalYamlKeys = raw.machineLocalYamlKeys.filter(
+      (key): key is string => typeof key === "string" && key.trim() !== ""
+    );
+  }
+
+  return {
+    ...raw,
+    extraPaths: extras,
+    machineLocalSettings,
+    machineLocalYamlKeys,
+  };
 }
