@@ -65,8 +65,8 @@ Before handing off a change:
 ```bash
 npm run typecheck    # tsc --noEmit for src and test
 npm test             # build + run the node:test suite
-npm run check        # typecheck + test (same gate CI uses)
+npm run check        # typecheck + test (the whole local gate)
 npm run build        # regenerate dist/ (committed build output)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci && npm run check` on Node 22.x and 23.x with a pre-set global git identity; `publish.yml` runs the same check before `npm publish` on `v*` tags.
+There is no CI in this repository: `.github/workflows/` was removed, so `npm run check` is the only automated gate and publishing is a manual `npm publish` after a version bump and a `dist/` rebuild.

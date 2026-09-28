@@ -16,7 +16,7 @@ npm run build:test && node --test dist-test/test/vault.test.js   # single file
 npm run typecheck                             # src and test, no emit
 ```
 
-`npm run check` (typecheck + test) is the gate CI runs on Node 22.x/23.x. There is no watch mode, no coverage tooling, and no lint step in this repository — the Quality Check in [`index.md`](./index.md) is the review standard.
+`npm run check` (typecheck + test) is the whole gate — there is no CI workflow in this repository, so run it before every commit. There is no watch mode, no coverage tooling, and no lint step either; the Quality Check in [`index.md`](./index.md) is the review standard.
 
 ## Fixtures
 

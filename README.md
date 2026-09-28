@@ -1,7 +1,6 @@
 # omp-settings-sync
 
 [![npm](https://img.shields.io/npm/v/omp-settings-sync)](https://www.npmjs.com/package/omp-settings-sync)
-[![CI](https://github.com/aaxyat/omp-settings-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/aaxyat/omp-settings-sync/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Securely sync your [Oh My Pi](https://omp.sh) (`~/.omp/agent`) configuration, session tokens, and login credentials across devices (Linux, macOS, Windows) through a private Git remote of your choice — automatically, with 4-tier guards keeping plaintext secrets, databases, and runtime state out.

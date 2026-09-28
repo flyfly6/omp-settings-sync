@@ -53,7 +53,7 @@
 **5. Build and release**
 
 - [ ] `npm run build` was run and `dist/` committed when shipped behaviour changed.
-- [ ] `npm run check` passes (same gate as CI and as the `prepare` script used by git/npm installs).
+- [ ] `npm run check` passes (the only gate; the `prepare` script runs the build for git/npm installs).
 - [ ] `package.json` `version` bumped for a publishable change; `omp.extensions` still points at `./dist/index.js`.
 
 **6. Host contract**

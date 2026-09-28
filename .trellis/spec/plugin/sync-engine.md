@@ -51,7 +51,7 @@ Divergence handling lives in `src/git.ts:integrateUpstream`: try `merge --ff-onl
 ## Git Process Layer Rules
 
 - `git(args, dir, timeout = 15_000)` and `gitRaw()` (buffer output, 64 MB) are the only executors. Mutating verbs (`add`, `commit`, `rebase`, `merge`, `reset`, `checkout`, `pull`, `push`) first run `cleanStaleIndexLock()` which removes a `index.lock` older than 15 s.
-- `gitEnv(dir)` is mandatory for isolation: `GIT_CEILING_DIRECTORIES` = parent of the agent dir (with backslashes normalized to `/`) so git cannot walk up into the user's home; `GIT_TERMINAL_PROMPT=0` so a credential prompt can never hang the agent; fixed author/committer identity so tests and CI need no global git config.
+- `gitEnv(dir)` is mandatory for isolation: `GIT_CEILING_DIRECTORIES` = parent of the agent dir (with backslashes normalized to `/`) so git cannot walk up into the user's home; `GIT_TERMINAL_PROMPT=0` so a credential prompt can never hang the agent; fixed author/committer identity so tests need no global git config.
 - Timeouts are part of the contract: 8 s for `ls-remote --heads` (`isRemoteReachable`), 20 s for `push`, 15 s default. Anything slower must be a deliberate change, not an omission.
 - Predicates are cheap and never throw: `hasDotGit`, `hasCommits`, `isSyncableRepo` (dot-git **and** an `origin` remote), `hasLocalChanges` (worktree dirty or, when the vault is unlocked, sensitive files changed), `hasRemoteChanges` (fetch + ahead/behind), `hasAnyChanges`.
 - `isSyncableRepo` gates every public entry point. A directory that is not a repo with `origin` is "not initialized", never an error.

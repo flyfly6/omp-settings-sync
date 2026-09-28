@@ -41,7 +41,7 @@ A single-package Oh My Pi (omp) **extension** published to npm as `omp-settings-
 
 ## How These Specs Were Produced
 
-Direct source reading of every module in `src/` and every file in `test/`, plus `package.json`, `tsconfig*.json`, `.github/workflows/*`, `README.md`, and the git history. GitNexus and ABCoder were not available in this environment, so no graph-derived claims are included — every rule points at a file or symbol that exists in the tree.
+Direct source reading of every module in `src/` and every file in `test/`, plus `package.json`, `tsconfig*.json`, `README.md`, and the git history. GitNexus and ABCoder were not available in this environment, so no graph-derived claims are included — every rule points at a file or symbol that exists in the tree.
 
 Known limitations of the snapshot:
 

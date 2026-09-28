@@ -15,7 +15,7 @@
 
 - `GIT_CEILING_DIRECTORIES` is set to the **parent** of the agent dir and normalized to forward slashes (`C:\Users\tester\.omp` → `C:/Users/tester/.omp`). Backslashes in that variable are consumed as escapes on some Git-for-Windows builds, which would let git walk up into the user's home. `test/cross-platform.test.ts` asserts the value contains no backslash.
 - `GIT_TERMINAL_PROMPT=0` keeps a credential prompt from blocking the agent process.
-- Author/committer identity is injected by `gitEnv`, so neither CI nor the test suite needs a global `git config` (CI still sets one defensively).
+- Author/committer identity is injected by `gitEnv`, so neither the test suite nor a fresh clone needs a global `git config`.
 - Filter commands are shell-quoted with `process.execPath` and the script path both converted to forward slashes (`formatFilterCommand`) — git runs filter commands through a shell, and a Windows backslash path would be read as an escape sequence.
 
 ## Line Endings
