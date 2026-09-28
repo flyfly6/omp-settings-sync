@@ -1,223 +1,57 @@
 # Code Reuse Thinking Guide
 
-> **Purpose**: Stop and think before creating new code - does it already exist?
+> Search before you write. In this repository the expensive mistake is not duplicated code — it is a **policy edited in one of its representations**.
 
 ---
 
-## The Problem
-
-**Duplicated code is the #1 source of inconsistency bugs.**
-
-When you copy-paste or rewrite existing logic:
-- Bug fixes don't propagate
-- Behavior diverges over time
-- Codebase becomes harder to understand
-
----
-
-## Before Writing New Code
-
-### Step 1: Search First
+## Rule 0: Search Before Changing A Value
 
 ```bash
-# Search for similar function names
-grep -r "functionName" .
-
-# Search for similar logic
-grep -r "keyword" .
+grep -rn "DEFAULT_ALLOWED_PATHS\|HARD_DENY_PATTERNS\|SYNCABLE_SENSITIVE_FILES" src test
 ```
 
-### Step 2: Ask These Questions
+Every list in this codebase has at least two representations (runtime logic and a git-level or documentation form). Changing one without the other is the single most common defect class here.
 
-| Question | If Yes... |
-|----------|-----------|
-| Does a similar function exist? | Use or extend it |
-| Is this pattern used elsewhere? | Follow the existing pattern |
-| Could this be a shared utility? | Create it in the right place |
-| Am I copying code from another file? | **STOP** - extract to shared |
+## The Multi-Site Change Map
 
----
+| You are changing | Update all of these |
+| :--- | :--- |
+| A syncable path | `src/security.ts:DEFAULT_ALLOWED_PATHS`; consumers in `src/config.ts` (allowlist comparison) and `README.md`; `test/security.test.ts` (ignore rules) |
+| A denied pattern | `src/security.ts:HARD_DENY_PATTERNS` (gitignore form) **and** `isDenied` (runtime form) **and** `README.md`; tests in `test/security.test.ts` + `test/cross-platform.test.ts` |
+| A machine-local key | `src/config.ts` defaults; the matching sidecar in `src/filter.ts:refreshMachineSidecar`; the filter script's behaviour is derived, but `README.md` and the filter/mcp tests are not |
+| A sensitive credential file | `src/vault.ts:SYNCABLE_SENSITIVE_FILES`; confirm `isDenied` still blocks the name; `README.md` ("What Syncs Encrypted"); `test/vault.test.ts` |
+| A slash command or flag | `src/index.ts` routing + `getArgumentCompletions` + usage string; orchestrator in `src/sync.ts`; `README.md` command table; `test/extension.test.ts` for registration |
+| A config key | `src/config.ts` (field + normalization); its consumer; `README.md` `omp-sync.jsonc` block; `test/config.test.ts` |
+| A new git attribute / format driver | `src/filter.ts` (`ensureAttributes` rules, `generateFilterScript` format branch, `ensureFilter` config keys); `refreshMachineSidecar` capture; a test |
+| Vault file format | `src/vault.ts` encrypt/decrypt **and** the `version` gate; `README.md`; `test/vault.test.ts` round-trip + tamper cases |
 
-## Common Duplication Patterns
+## The Local Reuse Inventory
 
-### Pattern 1: Copy-Paste Functions
+Before writing a helper, check whether one of these already does it:
 
-**Bad**: Copying a validation function to another file
+| Need | Use | Do not |
+| :--- | :--- | :--- |
+| Run git | `git()` / `gitRaw()` in `src/git.ts` | spawn `git` in another module (you would lose `gitEnv`, timeouts, stale-lock cleanup) |
+| Where is the agent dir | `dirOf(deps?)` | read `process.env` directly |
+| Tell the user something | `notify(ctx, text, level, deps?)` | `console.log` / `ctx.ui.notify` inline |
+| Show progress | `updateSyncProgress` / `clearSyncProgress` + `STATUS_KEY` | a second status key |
+| Write a file that must not be half-written | `atomicWriteFile` from `src/vault.ts` | `fs.writeFile` for state that another process may read |
+| Mutually exclude sync runs | `withLock(ctx, fn, deps?)` | a bespoke lock flag |
+| Access machine-local key lists | `machineJsonKeys` / `machineYamlKeys` / `mcpFields` / `mcpLocalServers` in `src/filter.ts` | reading `config.machineLocal*` directly (you would skip the defaults) |
+| Validate a user-supplied path | `isValidExtraPath` in `src/config.ts` | a second `..`/absolute check |
+| Warn once about a config problem | `warnConfigIssue` | an ad-hoc `stderr.write` |
+| Instantiate a test machine | `createMachineFixture` / `createBareRemote` | new temp-dir boilerplate |
 
-**Good**: Extract to shared utilities, import where needed
+## Where Duplication Is Accepted
 
-### Pattern 2: Similar Components
-
-**Bad**: Creating a new component that's 80% similar to existing
-
-**Good**: Extend existing component with props/variants
-
-### Pattern 3: Repeated Constants
-
-**Bad**: Defining the same constant in multiple files
-
-**Good**: Single source of truth, import everywhere
-
-### Pattern 4: Repeated Payload Field Extraction
-
-**Bad**: Multiple consumers cast the same JSON/event fields locally:
-
-```typescript
-const description = (ev as { description?: string }).description;
-const context = (ev as { context?: ContextEntry[] }).context;
-```
-
-This is duplicated contract logic even when the code is only two lines. Each
-consumer now has its own definition of what a valid payload means.
-
-**Good**: Put the decoder, type guard, or projection next to the data owner:
-
-```typescript
-if (isThreadEvent(ev)) {
-  renderThreadEvent(ev);
-}
-```
-
-**Rule**: If the same untyped payload field is read in 2+ places, create a
-shared type guard / normalizer / projection before adding a third reader.
-
----
-
-## When to Abstract
-
-**Abstract when**:
-- Same code appears 3+ times
-- Logic is complex enough to have bugs
-- Multiple people might need this
-
-**Don't abstract when**:
-- Only used once
-- Trivial one-liner
-- Abstraction would be more complex than duplication
-
----
-
-## After Batch Modifications
-
-When you've made similar changes to multiple files:
-
-1. **Review**: Did you catch all instances?
-2. **Search**: Run grep to find any missed
-3. **Consider**: Should this be abstracted?
-
-### Reducers Should Use Exhaustive Structure
-
-When state is derived from action-like values (`action`, `kind`, `status`,
-`phase`), prefer a reducer with one `switch` over scattered `if/else` updates.
-
-```typescript
-// BAD - action-specific state transitions are hard to audit
-if (action === "opened") { ... }
-else if (action === "comment") { ... }
-else if (action === "status") { ... }
-
-// GOOD - one reducer owns the transition table
-switch (event.action) {
-  case "opened":
-    ...
-    return;
-  case "comment":
-    ...
-    return;
-}
-```
-
-This matters when the event log is the source of truth. A reducer is the
-documented replay model; display code and commands should not duplicate pieces
-of that replay model.
-
----
+- `HARD_DENY_PATTERNS` vs `isDenied`: two shapes of one policy, kept in sync by hand. A shared generator was rejected — the gitignore form is a pattern list and the runtime form is segment/basename logic, and the mapping is not mechanical.
+- `src/sync.ts` re-states vault status text for `showStatus`. It is presentation, not policy.
+- `utils`-style modules: none exist and none should be created. Helpers live next to their single concern (`git.ts` for processes, `vault.ts` for file integrity, `filter.ts` for machine-local data).
 
 ## Checklist Before Commit
 
-- [ ] Searched for existing similar code
-- [ ] No copy-pasted logic that should be shared
-- [ ] No repeated untyped payload field extraction outside a shared decoder
-- [ ] Constants defined in one place
-- [ ] Similar patterns follow same structure
-- [ ] Reducer/action transitions live in one reducer or command dispatcher
-
----
-
-## Gotcha: Python if/elif/else Exhaustive Check
-
-**Problem**: Python's if/elif/else chains have no compile-time exhaustive check. When you add a new value to a `Literal` type (e.g., `Platform`), existing if/elif/else chains silently fall through to `else` with wrong defaults.
-
-**Symptom**: New platform works partially — some methods return Claude defaults instead of platform-specific values. No error is raised.
-
-**Example** (`cli_adapter.py`):
-```python
-# BAD: "gemini" falls through to else, returns "claude"
-@property
-def cli_name(self) -> str:
-    if self.platform == "opencode":
-        return "opencode"
-    else:
-        return "claude"  # gemini silently gets "claude"!
-
-# GOOD: explicit branch for every platform
-@property
-def cli_name(self) -> str:
-    if self.platform == "opencode":
-        return "opencode"
-    elif self.platform == "gemini":
-        return "gemini"
-    else:
-        return "claude"
-```
-
-**Prevention**: When adding a new value to a Python `Literal` type, search for ALL if/elif/else chains that switch on that type and add explicit branches. Don't rely on `else` being correct for new values.
-
----
-
-## Gotcha: Asymmetric Mechanisms Producing Same Output
-
-**Problem**: When two different mechanisms must produce the same file set (e.g., recursive directory copy for init vs. manual `files.set()` for update), structural changes (renaming, moving, adding subdirectories) only propagate through the automatic mechanism. The manual one silently drifts.
-
-**Symptom**: Init works perfectly, but update creates files at wrong paths or misses files entirely.
-
-**Prevention**:
-- **Best**: Eliminate the asymmetry — have the manual path call the automatic one (e.g., `collectTemplateFiles()` calls `getAllScripts()` instead of maintaining its own list)
-- **If asymmetry is unavoidable**: Add a regression test that compares outputs from both mechanisms
-- When migrating directory structures, search for ALL code paths that reference the old structure
-
-**Real example**: `trellis update` had a manual `files.set()` list for 11 scripts that `getAllScripts()` already tracked. Fix: replaced the manual list with a `for..of getAllScripts()` loop. See `update.ts` refactor in v0.4.0-beta.3.
-
----
-
-## Template File Registration (Trellis-specific)
-
-When adding new files to `src/templates/trellis/scripts/`:
-
-**Single registration point**: `src/templates/trellis/index.ts`
-
-1. Add `export const xxxScript = readTemplate("scripts/path/file.py");`
-2. Add to `getAllScripts()` Map
-
-That's it. `commands/update.ts` uses `getAllScripts()` directly — no manual sync needed.
-
-**Why this matters**: Without registration in `getAllScripts()`, `trellis update` won't sync the file to user projects. Bug fixes and features won't propagate.
-
-**History**: Before v0.4.0-beta.3, `update.ts` had its own hand-maintained file list that frequently fell out of sync with `getAllScripts()`. This caused 11 Python files to be silently skipped during `trellis update`. The fix was to eliminate the duplicate list and use `getAllScripts()` as the single source of truth.
-
-### Quick Checklist for New Scripts
-
-```bash
-# After adding a new .py file, verify it's in getAllScripts():
-grep -l "newFileName" src/templates/trellis/index.ts  # Should match
-```
-
-### Template Sync Convention
-
-`.trellis/scripts/` (dogfooded) and `packages/cli/src/templates/trellis/scripts/` (template) must stay identical. After editing `.trellis/scripts/`, always sync:
-
-```bash
-rsync -av --delete --exclude='__pycache__' .trellis/scripts/ packages/cli/src/templates/trellis/scripts/
-```
-
-**Gotcha**: Running rsync with wrong source/destination paths can create nested garbage directories (e.g., `.trellis/scripts/packages/cli/...`). Always double-check paths before running.
+- [ ] Grepped each constant/list I touched for other representations.
+- [ ] No new module duplicates a git spawn, a lock, or a path-resolution helper.
+- [ ] Machine-local keys flow from `src/config.ts` defaults through the `machineJsonKeys`/`mcpFields` accessors — no literal key arrays introduced elsewhere.
+- [ ] Docs (`README.md`) and the relevant test list both reflect the change.
+- [ ] If the change ships in `dist/`, it was rebuilt.

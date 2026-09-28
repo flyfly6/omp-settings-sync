@@ -21,42 +21,58 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill backend guidelines
-- [ ] Fill frontend guidelines
-- [ ] Add code examples
+- [x] Reshape the template spec layer to this repository (the generated `fullstack` guess was wrong)
+- [x] Fill the product-code guidelines (`plugin/`)
+- [x] Rewrite the shared thinking guides with real repository examples
+- [x] Add code examples, file paths, and anti-patterns from `src/` and `test/`
+
+Verified: no placeholder text, every relative link resolves, `index.md` files match the shipped file set.
 
 ---
 
-## Spec files to populate
+## Reality Check (why the template layer was replaced)
+
+`trellis init` guessed "fullstack": `.trellis/spec/backend/` (routes, ORM, migrations,
+logging) and `.trellis/spec/frontend/` (components, hooks, state management) describe a
+project this is not. `omp-settings-sync` is a **single-package TypeScript omp extension**
+with no HTTP server, no database, no UI framework, and zero runtime dependencies. Those
+two directories were deleted rather than filled with generic advice.
+
+The real codebase: `src/` (9 modules, 2 569 lines) + `test/` (11 files, `node:test`).
+
+---
+
+## Spec files shipped
 
 
-### Backend guidelines
+### `plugin/` — all product code
 
-| File | What to document |
-|------|------------------|
-| `.trellis/spec/backend/directory-structure.md` | Where different file types go (routes, services, utils) |
-| `.trellis/spec/backend/database-guidelines.md` | ORM, migrations, query patterns, naming conventions |
-| `.trellis/spec/backend/error-handling.md` | How errors are caught, logged, and returned |
-| `.trellis/spec/backend/logging-guidelines.md` | Log levels, format, what to log |
-| `.trellis/spec/backend/quality-guidelines.md` | Code review standards, testing requirements |
-
-
-### Frontend guidelines
-
-| File | What to document |
-|------|------------------|
-| `.trellis/spec/frontend/directory-structure.md` | Component/page/hook organization |
-| `.trellis/spec/frontend/component-guidelines.md` | Component patterns, props conventions |
-| `.trellis/spec/frontend/hook-guidelines.md` | Custom hook naming, patterns |
-| `.trellis/spec/frontend/state-management.md` | State library, patterns, what goes where |
-| `.trellis/spec/frontend/type-safety.md` | TypeScript conventions, type organization |
-| `.trellis/spec/frontend/quality-guidelines.md` | Linting, testing, accessibility |
+| File | What it documents |
+|------|-------------------|
+| `.trellis/spec/plugin/index.md` | Module table, Pre-Development Checklist, Quality Check, commands |
+| `.trellis/spec/plugin/architecture.md` | Managed-directory layout, module map, dependency direction (incl. the `config`↔`security` cycle), synced data flow, where new code goes |
+| `.trellis/spec/plugin/extension-api.md` | Host registration, command routing, flags, error boundary, `ctx.ui` contract, progress bar, lifecycle timing, extension test stub |
+| `.trellis/spec/plugin/sync-engine.md` | Commit pipeline, orchestrator contracts, `runSync` sequence, git process-layer rules, lock semantics, error policy |
+| `.trellis/spec/plugin/machine-local-sync.md` | The three filter drivers, generated `filter.mjs` protocol, sidecar symmetry, MCP field/server handling |
+| `.trellis/spec/plugin/security-guards.md` | The four guard tiers, `isDenied` vs `HARD_DENY_PATTERNS`, allowlist/exclusions, multi-site change list |
+| `.trellis/spec/plugin/credentials-vault.md` | `vault.enc` format + KDF params, passphrase cache, change detection, lifecycle, the missing version gate |
+| `.trellis/spec/plugin/configuration.md` | `omp-sync.jsonc` keys and defaults, lenient parsing, warning routing, `dirOf`, remote address rules |
+| `.trellis/spec/plugin/platform-compat.md` | Windows/macOS/Linux rules: separators, ceiling directory, CRLF, rename fallbacks, lock without a held fd |
+| `.trellis/spec/plugin/testing.md` | `node:test` harness, fixtures, what to assert, how to add tests, known gaps |
 
 
-### Thinking guides (already populated)
+### `guides/` — cross-cutting
 
-`.trellis/spec/guides/` contains general thinking guides pre-filled with
-best practices. Customize only if something clearly doesn't fit this project.
+| File | What it documents |
+|------|-------------------|
+| `.trellis/spec/guides/index.md` | Triggers for the two guides |
+| `.trellis/spec/guides/code-reuse-thinking-guide.md` | The multi-site change map and the local reuse inventory |
+| `.trellis/spec/guides/cross-layer-thinking-guide.md` | The five boundaries (filters, index, remote, machine state, shipped artifact, host) with per-boundary checklists |
+
+
+### Root navigation
+
+`.trellis/spec/index.md` — what the project is, the two spec layers, how to use them.
 
 ---
 

@@ -21,9 +21,10 @@
   "children": [],
   "parent": null,
   "relatedFiles": [
-    ".trellis/spec/backend/",
-    ".trellis/spec/frontend/"
+    ".trellis/spec/index.md",
+    ".trellis/spec/plugin/",
+    ".trellis/spec/guides/"
   ],
-  "notes": "First-time setup task created by trellis init (fullstack project)",
+  "notes": "First-time setup task created by trellis init (fullstack guess). Reshaped: backend/frontend template layers replaced by plugin/ (real single-package TypeScript omp extension) + project-specific guides.",
   "meta": {}
 }

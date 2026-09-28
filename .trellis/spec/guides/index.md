@@ -1,97 +1,44 @@
 # Thinking Guides
 
-> **Purpose**: Expand your thinking to catch things you might not have considered.
+> Two checks that catch most incomplete changes in this repository.
 
 ---
 
-## Why Thinking Guides?
+## Why These Two
 
-**Most bugs and tech debt come from "didn't think of that"**, not from lack of skill:
+This codebase's failure modes are narrow and predictable:
 
-- Didn't think about what happens at layer boundaries → cross-layer bugs
-- Didn't think about code patterns repeating → duplicated code everywhere
-- Didn't think about edge cases → runtime errors
-- Didn't think about future maintainers → unreadable code
-
-These guides help you **ask the right questions before coding**.
+1. **The same policy exists in several representations** (code predicate, gitignore pattern, documentation, test list). Editing one leaves the others stale — most often producing "sync silently does nothing" or "the guard let something through".
+2. **Data crosses five boundaries** (worktree ↔ index ↔ local repo ↔ remote, plus the machine-state sidecar directory and the compiled `dist/`). A change that works on one side of a boundary can silently lose data on the other.
 
 ---
 
-## Available Guides
+## Guide Index
 
-| Guide | Purpose | When to Use |
-|-------|---------|-------------|
-| [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
-| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
-
----
-
-## Quick Reference: Thinking Triggers
-
-### When to Think About Cross-Layer Issues
-
-- [ ] Feature touches 3+ layers (API, Service, Component, Database)
-- [ ] Data format changes between layers
-- [ ] Multiple consumers need the same data
-- [ ] You're not sure where to put some logic
-- [ ] You are adding an event kind, JSONL record, RPC payload, or config field
-- [ ] UI / command code starts casting raw payload fields directly
-
-→ Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
-
-### When to Think About Code Reuse
-
-- [ ] You're writing similar code to something that exists
-- [ ] You see the same pattern repeated 3+ times
-- [ ] You're adding a new field to multiple places
-- [ ] **You're modifying any constant or config**
-- [ ] **You're creating a new utility/helper function** ← Search first!
-- [ ] Two files read the same untyped payload field with local casts
-- [ ] Multiple branches update the same derived state from `kind` / `action`
-
-→ Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
-
-### When Verifying AI Cross-Review Results
-
-- [ ] Reviewer claims "user input can be malicious" → Check the actual data source (internal manifest? user config? external API?)
-- [ ] Reviewer flags "missing validation" → Is the data from a trusted internal source?
-- [ ] Reviewer says "behavior change" → Read the code comments — is it intentional design?
-- [ ] Reviewer identifies a "bug" in test → Mentally delete the feature being tested — does the test still pass? If yes → tautological test
-
-**Common AI reviewer false-positive patterns**:
-1. **Trust boundary confusion**: Treating internal data (bundled JSON manifests) as untrusted external input
-2. **Ignoring design comments**: Flagging intentional behavior documented in code comments as bugs
-3. **Variable misreading**: Not tracing a variable to its actual definition (e.g., Map keyed by path vs name)
-
-**Verification rule**: Every CRITICAL/WARNING finding must be verified against the actual code before prioritizing. Budget ~35% false-positive rate for AI reviews.
+| Guide | Use when |
+| :--- | :--- |
+| [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Adding an allowlisted path, a denied pattern, a machine-local key, a sensitive file, a command, or a config key — the multi-site change map lives here |
+| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Anything that changes data on its way through git filters, the index, the remote, or `.git-sync/`; or that changes what ships in `dist/` |
 
 ---
 
-## Pre-Modification Rule (CRITICAL)
+## Triggers
 
-> **Before changing ANY value, ALWAYS search first!**
+Read the reuse guide when:
 
-```bash
-# Search for the value you're about to change
-grep -r "value_to_change" .
-```
+- [ ] You are about to add a constant, list, or default that "feels like it exists already".
+- [ ] You are changing any entry in `DEFAULT_ALLOWED_PATHS`, `HARD_DENY_PATTERNS`, `isDenied`, `DEFAULT_MACHINE_LOCAL_*`, `SYNCABLE_SENSITIVE_FILES`, or the command usage string.
+- [ ] You are writing a new helper near `src/git.ts`, `src/lock.ts`, or `src/vault.ts`.
 
-This single habit prevents most "forgot to update X" bugs.
+Read the cross-layer guide when:
 
----
-
-## How to Use This Directory
-
-1. **Before coding**: Skim the relevant thinking guide
-2. **During coding**: If something feels repetitive or complex, check the guides
-3. **After bugs**: Add new insights to the relevant guide (learn from mistakes)
+- [ ] A change touches what gets committed, or what is restored on checkout.
+- [ ] You are editing `src/filter.ts` (clean and smudge must stay symmetric).
+- [ ] You are touching `src/index.ts` lifecycle hooks or anything that ships as `dist/`.
+- [ ] The change affects what a user sees after a pull (config or `mcp.json` only apply after `/reload`).
 
 ---
 
-## Contributing
+## Rule of Thumb
 
-Found a new "didn't think of that" moment? Add it to the relevant guide.
-
----
-
-**Core Principle**: 30 minutes of thinking saves 3 hours of debugging.
+If a change is visible to users, ask in order: **which list decides it → which module consumes it → which sidecar or filter carries it → which doc/test pins it.** Missing any of the four is the usual bug.
