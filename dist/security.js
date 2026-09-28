@@ -133,7 +133,8 @@ export async function ensureIgnoreRules(dir, config = {}) {
         existing = await fs.readFile(file, "utf8");
     }
     catch { }
-    const paths = [...DEFAULT_ALLOWED_PATHS, ...(config.extraPaths ?? []).filter(isValidExtraPath)];
+    const excluded = new Set((config.excludePaths ?? []).filter(isValidExtraPath));
+    const paths = [...DEFAULT_ALLOWED_PATHS, ...(config.extraPaths ?? []).filter(isValidExtraPath)].filter((entry) => !excluded.has(entry));
     const lines = [
         START_MARKER,
         "*",

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { isDenied } from "./security.js";
+import { DEFAULT_ALLOWED_PATHS, isDenied } from "./security.js";
 export const DEFAULT_MACHINE_LOCAL_JSON = ["lastChangelogVersion", "setupVersion"];
 export const DEFAULT_MACHINE_LOCAL_YAML = [
     "setupVersion",
@@ -164,6 +164,13 @@ export async function readConfig(deps, ctx) {
         }
     }
     const extras = (raw.extraPaths ?? []).filter(isValidExtraPath);
+    const excludes = (raw.excludePaths ?? []).filter(isValidExtraPath);
+    const syncable = new Set([...DEFAULT_ALLOWED_PATHS, ...extras]);
+    for (const entry of excludes) {
+        if (!syncable.has(entry)) {
+            warnConfigIssue(deps, ctx, `omp-sync: excludePaths entry "${entry}" is not a syncable path; ignored`);
+        }
+    }
     let machineLocalSettings;
     if (Array.isArray(raw.machineLocalSettings)) {
         machineLocalSettings = raw.machineLocalSettings.filter((key) => typeof key === "string" && key.trim() !== "");
@@ -175,6 +182,7 @@ export async function readConfig(deps, ctx) {
     return {
         ...raw,
         extraPaths: extras,
+        excludePaths: excludes,
         machineLocalSettings,
         machineLocalYamlKeys,
     };

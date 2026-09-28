@@ -89,11 +89,12 @@ function isProcessAlive(pid) {
 }
 export async function withLock(ctx, fn, deps) {
     const dir = dirOf(deps);
-    await fs.mkdir(stateDir(dir), { recursive: true });
     const lock = lockPath(dir);
-    // 1. Acquire in-process mutex to prevent concurrent async calls in same process
+    // 1. Acquire in-process mutex before any await on the filesystem, so concurrent
+    // callers queue in call order instead of racing on directory creation.
     const releaseInProcess = await acquireInProcessMutex(dir);
     try {
+        await fs.mkdir(stateDir(dir), { recursive: true });
         // 2. Acquire cross-process file lock
         try {
             const handle = await fs.open(lock, "wx");

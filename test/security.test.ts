@@ -69,3 +69,13 @@ test("ensureIgnoreRules writes managed block preserving user rules", async () =>
   assert.ok(content.includes("!AGENTS.md"));
   assert.ok(content.includes("*.db*"));
 });
+
+test("ensureIgnoreRules drops excluded allowlist entries and keeps the rest", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-ignore-exclude-"));
+  await ensureIgnoreRules(root, { excludePaths: ["mcp.json", "plugins"] });
+  const content = await fs.readFile(path.join(root, ".gitignore"), "utf8");
+
+  assert.ok(content.includes("!config.yml"));
+  assert.ok(!content.includes("!mcp.json"), "an excluded file must not be allowlisted");
+  assert.ok(!content.includes("!plugins"), "an excluded directory must not be allowlisted");
+});

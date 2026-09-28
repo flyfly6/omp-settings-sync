@@ -26,15 +26,16 @@ test("dirOf resolves ~/.omp/agent by default, respects OMP_PROFILE and PI_CODING
   }
 });
 
-test("readConfig parses JSONC with comments and validates safe extraPaths and machineLocalSettings", async () => {
+test("readConfig parses JSONC with comments and validates safe extraPaths, excludePaths and machineLocalSettings", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-config-test-"));
-  const configContent = `{\n  // Auto sync interval in minutes\n  "autoSyncIntervalMinutes": 10,\n  "includeHostname": false,\n  "extraPaths": ["safe-dir", "custom/path", "../unsafe", "auth-token"],\n  "machineLocalSettings": ["setupVersion", "dev.autoqaConsent", ""]\n}`;
+  const configContent = `{\n  // Auto sync interval in minutes\n  "autoSyncIntervalMinutes": 10,\n  "includeHostname": false,\n  "extraPaths": ["safe-dir", "custom/path", "../unsafe", "auth-token"],\n  "excludePaths": ["mcp.json", "../unsafe"],\n  "machineLocalSettings": ["setupVersion", "dev.autoqaConsent", ""]\n}`;
   await fs.writeFile(path.join(tempDir, "omp-sync.jsonc"), configContent);
 
   const config = await readConfig({ dir: tempDir });
   assert.equal(config.autoSyncIntervalMinutes, 10);
   assert.equal(config.includeHostname, false);
   assert.deepEqual(config.extraPaths, ["safe-dir", "custom/path"]);
+  assert.deepEqual(config.excludePaths, ["mcp.json"]);
   assert.deepEqual(config.machineLocalSettings, ["setupVersion", "dev.autoqaConsent"]);
 });
 

@@ -2,12 +2,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { GhClient } from "./gh.js";
-import { isDenied } from "./security.js";
+import { DEFAULT_ALLOWED_PATHS, isDenied } from "./security.js";
 
 export interface OmpSyncConfig {
   autoSyncIntervalMinutes?: number;
   includeHostname?: boolean;
   extraPaths?: string[];
+  excludePaths?: string[];
   warnOnPublicRemote?: boolean;
   machineLocalSettings?: string[];
   machineLocalYamlKeys?: string[];
@@ -190,6 +191,13 @@ export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig>
   }
 
   const extras = (raw.extraPaths ?? []).filter(isValidExtraPath);
+  const excludes = (raw.excludePaths ?? []).filter(isValidExtraPath);
+  const syncable = new Set([...DEFAULT_ALLOWED_PATHS, ...extras]);
+  for (const entry of excludes) {
+    if (!syncable.has(entry)) {
+      warnConfigIssue(deps, ctx, `omp-sync: excludePaths entry "${entry}" is not a syncable path; ignored`);
+    }
+  }
 
   let machineLocalSettings: string[] | undefined;
   if (Array.isArray(raw.machineLocalSettings)) {
@@ -208,6 +216,7 @@ export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig>
   return {
     ...raw,
     extraPaths: extras,
+    excludePaths: excludes,
     machineLocalSettings,
     machineLocalYamlKeys,
   };

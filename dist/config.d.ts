@@ -3,6 +3,7 @@ export interface OmpSyncConfig {
     autoSyncIntervalMinutes?: number;
     includeHostname?: boolean;
     extraPaths?: string[];
+    excludePaths?: string[];
     warnOnPublicRemote?: boolean;
     machineLocalSettings?: string[];
     machineLocalYamlKeys?: string[];

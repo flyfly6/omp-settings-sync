@@ -111,6 +111,7 @@ Synchronization is fully automated:
 - `AGENTS.md` / `Agents.md`: Global instructions and directives
 - `extensions/`, `skills/`, `agents/`, `chains/`, `prompts/`, `themes/`, `plugins/`: Custom resources
 - `.gitignore`, `.gitattributes`, `omp-sync.jsonc`: Sync policy
+- `excludePaths` in `omp-sync.jsonc` removes any of the entries above from the sync set (for example keep a machine-specific `mcp.json` local by excluding it)
 
 ### What Syncs Encrypted (Vault)
 - `vault.enc`: AES-256-GCM encrypted payload containing `auth.json`, `auth-broker.json`, and login session tokens.
@@ -134,6 +135,7 @@ Create `~/.omp/agent/omp-sync.jsonc` (or `git-sync.jsonc`):
   "autoSyncIntervalMinutes": 1,
   "includeHostname": true,
   "extraPaths": ["custom-safe-dir"],
+  "excludePaths": ["mcp.json"],
   "warnOnPublicRemote": true,
   "machineLocalSettings": ["lastChangelogVersion", "setupVersion"],
   "machineLocalYamlKeys": [
