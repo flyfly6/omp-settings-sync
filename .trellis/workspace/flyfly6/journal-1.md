@@ -94,3 +94,25 @@ omp installs plugins into <config root>/plugins, a sibling of the managed agent 
 
 - Publish 0.2.0 with npm publish and reload the plugin in omp to exercise /ompsync plugins end to end on a second machine
 - Re-run the full suite (npm run check) before the next release tag if the plugin apply path changes
+
+
+## Session 3: Clear legacy skip-worktree bits before reset
+<!-- trellis-session: v=2 fp=e190a697a258fcb2 -->
+
+**Date**: 2026-09-28
+**Task**: Clear legacy skip-worktree bits before reset
+**Branch**: `main`
+
+### Summary
+
+runReset clears stranded git skip-worktree bits before reset --hard; +2 regression tests, spec row, README row; v0.2.1
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8186476` | fix(reset): clear legacy skip-worktree bits before reset --hard (v0.2.1) |
+
+### Status
+
+[OK] **Completed**

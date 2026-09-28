@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
+- **Total Sessions**: 3
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~96 | Active |
+| `journal-1.md` | ~118 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 3 | 2026-09-28 | Clear legacy skip-worktree bits before reset | `8186476` | `main` |
 | 2 | 2026-09-28 | Sync installed plugin declarations across machines | `936b7cd`, `a7c8bc5` | `main` |
 | 1 | 2026-09-28 | Rebuild .trellis/spec from the real plugin codebase and drop dead CI | `9fd960d`, `1ef5b6c` | `main` |
 <!-- @@@/auto:session-history -->
