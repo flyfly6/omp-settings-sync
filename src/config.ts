@@ -11,6 +11,8 @@ export interface OmpSyncConfig {
   warnOnPublicRemote?: boolean;
   machineLocalSettings?: string[];
   machineLocalYamlKeys?: string[];
+  machineLocalMcpFields?: string[];
+  machineLocalMcpServers?: string[];
   preferRemote?: boolean;
   discardLocalOnConflict?: boolean;
 }
@@ -61,6 +63,9 @@ export const DEFAULT_MACHINE_LOCAL_YAML = [
   "browser.cdpUrl",
   "browser.relayUrl",
 ];
+
+/** MCP server fields whose values differ per machine (absolute paths, npx/vendor shims, Windows-only env). */
+export const DEFAULT_MACHINE_LOCAL_MCP_FIELDS = ["command", "args", "env"];
 
 export function dirOf(deps?: Deps): string {
   if (deps?.dir) return path.resolve(deps.dir);
@@ -211,11 +216,27 @@ export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig>
     );
   }
 
+  let machineLocalMcpFields: string[] | undefined;
+  if (Array.isArray(raw.machineLocalMcpFields)) {
+    machineLocalMcpFields = raw.machineLocalMcpFields.filter(
+      (key): key is string => typeof key === "string" && key.trim() !== ""
+    );
+  }
+
+  let machineLocalMcpServers: string[] | undefined;
+  if (Array.isArray(raw.machineLocalMcpServers)) {
+    machineLocalMcpServers = raw.machineLocalMcpServers.filter(
+      (key): key is string => typeof key === "string" && key.trim() !== ""
+    );
+  }
+
   return {
     ...raw,
     extraPaths: extras,
     excludePaths: excludes,
     machineLocalSettings,
     machineLocalYamlKeys,
+    machineLocalMcpFields,
+    machineLocalMcpServers,
   };
 }

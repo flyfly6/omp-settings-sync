@@ -18,6 +18,7 @@ The agent directory (`~/.omp/agent` or `~/.omp/profiles/<profile>/agent`) **is**
 - 💻 **Cross-Platform Compatibility:** Full native support for Windows, macOS, and Linux with robust path normalization, CRLF/LF line-ending preservation, and safe process locking.
 - 🛡️ **4-Tier Security Guards:** Inverted allowlist `.gitignore`, local `.git/info/exclude`, pre-commit staging blocker, and tracked file scanner ensuring plaintext secrets, tokens, and SQLite databases (`agent.db*`, `models.db*`, `history.db*`) are never committed.
 - ⚙️ **Dual YAML & JSON Clean/Smudge Filter:** Machine-local settings (`images.urls.credentials`, `dev.autoqaPush.token`, `searxng.*`, `hindsight.*`, `auth.broker.*`, `setupVersion`, `shellPath`, etc.) are stripped from commits and preserved in local sidecars.
+- 🧩 **Cross-Platform MCP Sync:** `mcp.json` syncs server registrations between Windows, macOS, and Linux, while `command`, `args`, and `env` (absolute paths, `cmd /c npx` vs `npx`) stay machine-local in `.git-sync/mcp.machine.json` and are merged back on every checkout.
 - 🚀 **Bring Your Own Git Remote:** Any git URL works — GitHub, GitLab, or self-hosted, over SSH, HTTPS, or a local path. `/ompsync init <url>` and `/ompsync link <url>` always take the repository address explicitly; no GitHub CLI, no implicit repository creation.
 - 🔄 **Graceful Onboarding:** Linking on a new device without entering a password syncs all unencrypted configuration smoothly without errors; unlock your encrypted vault anytime via `/ompsync unlock`.
 
@@ -104,12 +105,12 @@ Synchronization is fully automated:
 
 ### What Syncs in Plaintext (Allowlist)
 - `config.yml` / `config.yaml`: Global model defaults, themes, tool parameters (with machine-local & sensitive keys stripped)
-- `mcp.json`: Model Context Protocol server registrations
+- `mcp.json`: Model Context Protocol server registrations (with per-platform launcher fields stripped, see [MCP Servers Across Machines](#mcp-servers-across-machines))
 - `settings.json`: Legacy/migrated settings
 - `AGENTS.md` / `Agents.md`: Global instructions and directives
 - `extensions/`, `skills/`, `agents/`, `chains/`, `prompts/`, `themes/`, `plugins/`: Custom resources
 - `.gitignore`, `.gitattributes`, `omp-sync.jsonc`: Sync policy
-- `excludePaths` in `omp-sync.jsonc` removes any of the entries above from the sync set (for example keep a machine-specific `mcp.json` local by excluding it)
+- `excludePaths` in `omp-sync.jsonc` removes any of the entries above from the sync set (for example keep a machine-specific `models.yml` local by excluding it)
 
 ### What Syncs Encrypted (Vault)
 - `vault.enc`: AES-256-GCM encrypted payload containing `auth.json`, `auth-broker.json`, and login session tokens.
@@ -117,10 +118,25 @@ Synchronization is fully automated:
 ### What NEVER Syncs in Plaintext (Hard Denylist)
 - `auth*` (`auth.json`, `auth-broker.json`): Raw plaintext API keys and OAuth tokens
 - `*token*`, `*secret*`, `*credential*`, `*.env*`, `*.local.json`, `*.local.yml`: Plaintext secrets
+- `*.local-backup`: Local copies kept aside when a pull would overwrite a differing file
 - `*.db`, `*.db-*`, `*.sqlite*` (`agent.db`, `models.db`, `history.db`): SQLite databases and WAL caches
 - `sessions/`, `state/`, `blobs/`, `terminal-sessions/`, `cache/`, `natives/`, `logs/`, `run/`, `wt/`, `.git-sync/`: Local session history, process sockets, worktrees, and machine state
 - `node_modules/`, `npm/`, `git/`, `bin/`: Dependencies and binaries
 - `last-changelog-version`: Machine changelog tracking
+
+---
+
+## MCP Servers Across Machines
+
+`mcp.json` is synchronized like any other allowlisted file, but the fields that cannot be shared are kept per machine:
+
+- `command`, `args`, and `env` never leave the machine that owns them (`cmd` + `["/c", "npx", …]` on Windows, `npx` on macOS). The committed copy keeps everything else: server names, `type`, `url`, `timeout`, `enabledServers`, `disabledServers`.
+- Each sync snapshots those fields into `.git-sync/mcp.machine.json` (gitignored, never committed) and the checkout filter merges them back, so pulling a teammate machine's change never replaces your launcher.
+- A server registered on one machine therefore appears on the others as a stub (`{"type": "stdio"}`). The next pull reports it (`mcp.json servers need this machine's own values: …`) — add your platform's `command`/`args` once and it stays local; servers listed in `disabledServers` are not reported.
+- Servers that exist on one platform only stay entirely local: list them in `machineLocalMcpServers`.
+- Same-platform fleet (all Windows, all macOS)? Set `"machineLocalMcpFields": []` to sync `command`/`args`/`env` verbatim as before.
+
+`.git-sync/mcp.machine.json` is machine state like any other sidecar: it holds the same launcher strings that already live in your local `mcp.json`, and it is excluded by the hard denylist.
 
 ---
 
@@ -133,7 +149,7 @@ Create `~/.omp/agent/omp-sync.jsonc` (or `git-sync.jsonc`):
   "autoSyncIntervalMinutes": 1,
   "includeHostname": true,
   "extraPaths": ["custom-safe-dir"],
-  "excludePaths": ["mcp.json"],
+  "excludePaths": ["models.yml"],
   "warnOnPublicRemote": true,
   "machineLocalSettings": ["lastChangelogVersion", "setupVersion"],
   "machineLocalYamlKeys": [
@@ -141,7 +157,11 @@ Create `~/.omp/agent/omp-sync.jsonc` (or `git-sync.jsonc`):
     "shellPath",
     "dev.autoqaPush.token",
     "images.urls.credentials"
-  ]
+  ],
+  // Defaults: ["command", "args", "env"]. Use [] to sync MCP launchers verbatim.
+  "machineLocalMcpFields": ["command", "args", "env"],
+  // Server entries that exist on this machine only.
+  "machineLocalMcpServers": ["win-only-tool"]
 }
 ```
 

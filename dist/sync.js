@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { dirOf, readConfig } from "./config.js";
-import { ensureAttributes, ensureFilter, refreshMachineSidecar } from "./filter.js";
+import { ensureAttributes, ensureFilter, mcpServersMissingLocalValues, refreshMachineSidecar } from "./filter.js";
 import { remoteFromArg } from "./remote.js";
 import { countAheadBehind, fetchOrigin, getConflictState, getSyncDivergence, git, gitRaw, hasCommits, hasDotGit, hasLocalChanges, hasRemoteChanges, integrateUpstream, isRemoteReachable, isSyncableRepo, pushOrigin, upstreamRef, } from "./git.js";
 import { isSubagentChild, shouldCheckRemote, withLock, writeSyncState } from "./lock.js";
@@ -83,6 +83,10 @@ export async function commitLocalChanges(deps, commitMessage, ctx) {
         await git(["reset"], dir);
         throw new Error(`REFUSED to commit sensitive paths: ${bad.join(", ")}. Remove with git rm --cached <file>.`);
     }
+    // The clean filter rewrites allowlisted files on their way into the index, so a worktree edit that only
+    // touches machine-local fields (a new mcp.json launcher, a sidecar key) leaves nothing to commit.
+    if (!(await git(["diff", "--cached", "--name-only"], dir)).stdout.trim())
+        return false;
     const config = await readConfig(deps, ctx);
     const suffix = config.includeHostname === false ? "" : ` from ${os.hostname()}`;
     await git(["commit", "-m", commitMessage ?? `omp config: auto-sync${suffix}`], dir);
@@ -447,9 +451,11 @@ export async function runSync(ctx, options, deps) {
         }
         updateSyncProgress(ctx, 30, "Checking local changes...");
         const changed = [];
+        // commitLocalChanges prepares the ignore rules, filters and machine sidecars itself.
         if (await commitLocalChanges(deps, undefined, ctx)) {
             changed.push("committed local changes");
         }
+        const upstream = await upstreamRef(dir);
         if (!options.skipPull) {
             updateSyncProgress(ctx, 50, "Fetching remote updates...");
             if (!(await fetchOrigin(dir))) {
@@ -462,12 +468,12 @@ export async function runSync(ctx, options, deps) {
                 }
                 return;
             }
-            const upstream = (await upstreamRef(dir)) ?? `origin/${await defaultBranch(dir)}`;
-            if (upstream) {
-                const { behind } = await countAheadBehind(upstream, dir).catch(() => ({ behind: 0, ahead: 0 }));
+            const target = upstream ?? `origin/${await defaultBranch(dir)}`;
+            if (target) {
+                const { behind } = await countAheadBehind(target, dir).catch(() => ({ behind: 0, ahead: 0 }));
                 if (behind > 0) {
                     updateSyncProgress(ctx, 70, "Integrating remote changes...");
-                    if (!(await integrateUpstream(upstream, dir))) {
+                    if (!(await integrateUpstream(target, dir))) {
                         if (config.discardLocalOnConflict) {
                             await git(["rebase", "--abort"], dir).catch(() => { });
                             return runReset(ctx, deps);
@@ -475,6 +481,10 @@ export async function runSync(ctx, options, deps) {
                         throw new Error(`local and remote diverged with conflicts; rebase aborted in ${dir}. Run '/ompsync reset' to discard local changes and sync from remote.`);
                     }
                     changed.push("pulled updates");
+                    const pending = await mcpServersMissingLocalValues(dir, config);
+                    if (pending.length) {
+                        notify(ctx, `omp-sync: mcp.json servers need this machine's own values (command/args/env stay local): ${pending.join(", ")}.`, "warning", deps);
+                    }
                     // If remote updated vault.enc and we have a cached password, update local credentials
                     const vaultStatus = await getVaultStatus(dir);
                     if (vaultStatus === "unlocked") {
@@ -493,22 +503,22 @@ export async function runSync(ctx, options, deps) {
         }
         if (options.push) {
             updateSyncProgress(ctx, 90, "Pushing changes to remote...");
-            const upstream = (await upstreamRef(dir)) ?? `origin/${await defaultBranch(dir)}`;
+            const target = upstream ?? `origin/${await defaultBranch(dir)}`;
             let pushed = false;
-            const { ahead } = await countAheadBehind(upstream, dir).catch(() => ({ ahead: 1, behind: 0 }));
+            const { ahead } = await countAheadBehind(target, dir).catch(() => ({ ahead: 1, behind: 0 }));
             if (ahead > 0) {
                 pushed = await pushOrigin(false, dir);
                 // Push rejected (race condition where remote was updated concurrently)
                 if (!pushed) {
                     updateSyncProgress(ctx, 92, "Remote advanced, reconciling changes...");
                     if (await fetchOrigin(dir)) {
-                        if (await integrateUpstream(upstream, dir)) {
+                        if (await integrateUpstream(target, dir)) {
                             pushed = await pushOrigin(false, dir);
                         }
                     }
                 }
             }
-            else if (!upstreamRef(dir)) {
+            else if (!upstream) {
                 pushed = await pushOrigin(true, dir);
             }
             if (pushed)

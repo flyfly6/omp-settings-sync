@@ -6,6 +6,8 @@ export interface OmpSyncConfig {
     warnOnPublicRemote?: boolean;
     machineLocalSettings?: string[];
     machineLocalYamlKeys?: string[];
+    machineLocalMcpFields?: string[];
+    machineLocalMcpServers?: string[];
     preferRemote?: boolean;
     discardLocalOnConflict?: boolean;
 }
@@ -32,6 +34,8 @@ export interface UIContext {
 export type Ctx = UIContext | undefined;
 export declare const DEFAULT_MACHINE_LOCAL_JSON: string[];
 export declare const DEFAULT_MACHINE_LOCAL_YAML: string[];
+/** MCP server fields whose values differ per machine (absolute paths, npx/vendor shims, Windows-only env). */
+export declare const DEFAULT_MACHINE_LOCAL_MCP_FIELDS: string[];
 export declare function dirOf(deps?: Deps): string;
 export declare function stripJsonComments(input: string): string;
 export declare function isValidExtraPath(entry: string): boolean;

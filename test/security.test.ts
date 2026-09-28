@@ -28,6 +28,8 @@ test("isDenied blocks all secrets, databases, runtime state, and local credentia
     "prod.env",
     "config.local.yml",
     "mcp.local.json",
+    "config.yml.local-backup",
+    "extensions/custom.ts.local-backup",
     "node_modules/pkg/index.js",
   ];
   for (const file of blocked) {
@@ -68,6 +70,7 @@ test("ensureIgnoreRules writes managed block preserving user rules", async () =>
   assert.ok(content.includes("!mcp.json"));
   assert.ok(content.includes("!AGENTS.md"));
   assert.ok(content.includes("*.db*"));
+  assert.ok(content.includes("*.local-backup"));
 });
 
 test("ensureIgnoreRules drops excluded allowlist entries and keeps the rest", async () => {

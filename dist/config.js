@@ -23,6 +23,8 @@ export const DEFAULT_MACHINE_LOCAL_YAML = [
     "browser.cdpUrl",
     "browser.relayUrl",
 ];
+/** MCP server fields whose values differ per machine (absolute paths, npx/vendor shims, Windows-only env). */
+export const DEFAULT_MACHINE_LOCAL_MCP_FIELDS = ["command", "args", "env"];
 export function dirOf(deps) {
     if (deps?.dir)
         return path.resolve(deps.dir);
@@ -179,12 +181,22 @@ export async function readConfig(deps, ctx) {
     if (Array.isArray(raw.machineLocalYamlKeys)) {
         machineLocalYamlKeys = raw.machineLocalYamlKeys.filter((key) => typeof key === "string" && key.trim() !== "");
     }
+    let machineLocalMcpFields;
+    if (Array.isArray(raw.machineLocalMcpFields)) {
+        machineLocalMcpFields = raw.machineLocalMcpFields.filter((key) => typeof key === "string" && key.trim() !== "");
+    }
+    let machineLocalMcpServers;
+    if (Array.isArray(raw.machineLocalMcpServers)) {
+        machineLocalMcpServers = raw.machineLocalMcpServers.filter((key) => typeof key === "string" && key.trim() !== "");
+    }
     return {
         ...raw,
         extraPaths: extras,
         excludePaths: excludes,
         machineLocalSettings,
         machineLocalYamlKeys,
+        machineLocalMcpFields,
+        machineLocalMcpServers,
     };
 }
 //# sourceMappingURL=config.js.map

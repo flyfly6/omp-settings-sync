@@ -46,6 +46,7 @@ export const HARD_DENY_PATTERNS = [
   "*.local.json",
   "*.local.yml",
   "*.local.yaml",
+  "*.local-backup",
   "*.db",
   "*.db*",
   "*.db-*",
@@ -107,6 +108,7 @@ export function isDenied(file: string): boolean {
     basename.endsWith(".local.json") ||
     basename.endsWith(".local.yml") ||
     basename.endsWith(".local.yaml") ||
+    basename.endsWith(".local-backup") ||
     basename === "last-changelog-version" ||
     basename.endsWith(".db") ||
     basename.includes(".db-") ||
