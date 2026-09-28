@@ -4,3 +4,5 @@ dist-test/
 .DS_Store
 source/
 .git-sync/
+.agents/
+.pi/
