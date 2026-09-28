@@ -6,6 +6,7 @@ import { dirOf, readConfig } from "./config.js";
 import { ensureAttributes, ensureFilter, mcpServersMissingLocalValues, refreshMachineSidecar } from "./filter.js";
 import { remoteFromArg } from "./remote.js";
 import {
+  clearSkipWorktree,
   countAheadBehind,
   fetchOrigin,
   getConflictState,
@@ -615,6 +616,7 @@ export async function runReset(ctx: Ctx, deps?: Deps): Promise<void> {
   updateSyncProgress(ctx, 50, `Resetting to origin/${branch}...`);
 
   // Discard all local changes, commits, and conflicts; force reset to remote branch
+  await clearSkipWorktree(dir);
   await git(["reset", "--hard", `origin/${branch}`], dir);
   await git(["clean", "-fd"], dir).catch(() => {});
 

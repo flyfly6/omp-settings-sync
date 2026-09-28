@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { parseRepoReference, remoteFromArg } from "../src/remote.js";
-import { git, hasAnyChanges, hasDotGit, hasLocalChanges, isSyncableRepo } from "../src/git.js";
+import { clearSkipWorktree, git, hasAnyChanges, hasDotGit, hasLocalChanges, isSyncableRepo } from "../src/git.js";
 
 test("parseRepoReference parses various GitHub repository URL and name shapes", () => {
   assert.deepEqual(parseRepoReference("org/repo"), { owner: "org", name: "repo" });
@@ -20,6 +20,22 @@ test("remoteFromArg requires an explicit repository address", () => {
   assert.equal(remoteFromArg("git@github.com:org/repo.git"), "git@github.com:org/repo.git");
   assert.equal(remoteFromArg("https://gitlab.com/org/repo.git"), "https://gitlab.com/org/repo.git");
   assert.equal(remoteFromArg("/srv/git/config.git"), "/srv/git/config.git");
+});
+
+test("clearSkipWorktree drops legacy skip-worktree bits so index rewrites can proceed", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-skip-worktree-"));
+  await git(["init", "-b", "main"], root);
+  await fs.writeFile(path.join(root, "frozen.txt"), "local\n");
+  await git(["add", "frozen.txt"], root);
+  await git(["commit", "-m", "init"], root);
+  await git(["update-index", "--skip-worktree", "frozen.txt"], root);
+
+  assert.deepEqual(await clearSkipWorktree(root), ["frozen.txt"]);
+  assert.equal((await git(["ls-files", "-v"], root)).stdout.trim().slice(0, 2), "H ");
+
+  // Idempotent: nothing left to clear on a second run.
+  assert.deepEqual(await clearSkipWorktree(root), []);
+  await fs.rm(root, { recursive: true, force: true });
 });
 
 test("git operations execute in isolated ceiling directory and detect changes", async () => {

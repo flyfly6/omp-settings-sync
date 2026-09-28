@@ -4,7 +4,7 @@ import path from "node:path";
 import { dirOf, readConfig } from "./config.js";
 import { ensureAttributes, ensureFilter, mcpServersMissingLocalValues, refreshMachineSidecar } from "./filter.js";
 import { remoteFromArg } from "./remote.js";
-import { countAheadBehind, fetchOrigin, getConflictState, getSyncDivergence, git, gitRaw, hasCommits, hasDotGit, hasLocalChanges, hasRemoteChanges, integrateUpstream, isRemoteReachable, isSyncableRepo, pushOrigin, upstreamRef, } from "./git.js";
+import { clearSkipWorktree, countAheadBehind, fetchOrigin, getConflictState, getSyncDivergence, git, gitRaw, hasCommits, hasDotGit, hasLocalChanges, hasRemoteChanges, integrateUpstream, isRemoteReachable, isSyncableRepo, pushOrigin, upstreamRef, } from "./git.js";
 import { isSubagentChild, shouldCheckRemote, withLock, writeSyncState } from "./lock.js";
 import { applyPluginPlan, describePluginAction, PLUGIN_MANIFEST_FILE, pluginCommand, pluginPlan, readLocalPlugins, readPluginManifest, refreshPluginManifest, } from "./plugins.js";
 import { ensureIgnoreRules, ensureInfoExclude, isDenied, stagedSecretFiles, trackedSecretFiles, } from "./security.js";
@@ -466,6 +466,7 @@ export async function runReset(ctx, deps) {
     const branch = await defaultBranch(dir);
     updateSyncProgress(ctx, 50, `Resetting to origin/${branch}...`);
     // Discard all local changes, commits, and conflicts; force reset to remote branch
+    await clearSkipWorktree(dir);
     await git(["reset", "--hard", `origin/${branch}`], dir);
     await git(["clean", "-fd"], dir).catch(() => { });
     updateSyncProgress(ctx, 80, "Restoring configuration & vault...");

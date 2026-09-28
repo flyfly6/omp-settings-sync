@@ -106,6 +106,32 @@ export async function isRemoteReachable(dir) {
         return false;
     }
 }
+/**
+ * Drop legacy skip-worktree bits left on tracked files (the pre-0.2 way of freezing `mcp.json`).
+ * The plugin never sets the bit, but an inherited one on a file whose worktree copy drifted makes
+ * `git reset --hard` abort with "Entry '<path>' not uptodate. Cannot merge." instead of discarding
+ * local state. Returns the paths that were cleared.
+ */
+export async function clearSkipWorktree(dir) {
+    let stdout;
+    try {
+        ({ stdout } = await git(["ls-files", "-v", "-z"], dir));
+    }
+    catch {
+        return [];
+    }
+    const paths = stdout
+        .split("\0")
+        .filter((entry) => entry.startsWith("S "))
+        .map((entry) => entry.slice(2));
+    if (!paths.length)
+        return [];
+    try {
+        await git(["update-index", "--no-skip-worktree", "--", ...paths], dir);
+    }
+    catch { }
+    return paths;
+}
 export async function integrateUpstream(upstream, dir) {
     try {
         await git(["merge", "--ff-only", upstream], dir);

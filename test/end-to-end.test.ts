@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { git, hasDotGit } from "../src/git.js";
-import { checkAndBackgroundSync, runInit, runLink, runSync, runUnlockVault, showStatus } from "../src/sync.js";
+import { checkAndBackgroundSync, runInit, runLink, runReset, runSync, runUnlockVault, showStatus } from "../src/sync.js";
 
 import { getVaultStatus } from "../src/vault.js";
 import { createBareRemote, createMachineFixture } from "./helpers.js";
@@ -238,6 +238,31 @@ test("runReset and runSync with discardLocal forcefully discard local changes an
     (await fs.readFile(path.join(b.dir, "AGENTS.md"), "utf8")).replace(/\r\n/g, "\n"),
     "# Agent Instructions\n"
   );
+});
+
+test("runReset clears a legacy skip-worktree bit instead of aborting on 'not uptodate'", async () => {
+  const a = await createMachineFixture("skipworktree-a");
+  const remote = await createBareRemote(a.root);
+  await runInit(remote, undefined, { dir: a.dir });
+
+  const b = await createMachineFixture("skipworktree-b");
+  await runLink(remote, undefined, { dir: b.dir });
+
+  // Legacy freeze recipe: `git update-index --skip-worktree` on a file whose worktree copy no longer
+  // matches the committed one — exactly the state a stranded mcp.json freeze leaves behind.
+  await fs.writeFile(path.join(b.dir, "AGENTS.md"), "# Divergent Local Commit\n");
+  await git(["add", "AGENTS.md"], b.dir);
+  await git(["commit", "-m", "local divergence"], b.dir);
+  await git(["update-index", "--skip-worktree", "AGENTS.md"], b.dir);
+  await fs.writeFile(path.join(b.dir, "AGENTS.md"), "# Frozen Worktree Edits\n");
+
+  await runReset(undefined, { dir: b.dir });
+
+  assert.equal(
+    (await fs.readFile(path.join(b.dir, "AGENTS.md"), "utf8")).replace(/\r\n/g, "\n"),
+    "# Agent Instructions\n"
+  );
+  assert.equal((await git(["ls-files", "-v"], b.dir)).stdout.trim().slice(0, 2), "H ");
 });
 
 test("runSync automatically reconciles and retries push on race condition", async () => {

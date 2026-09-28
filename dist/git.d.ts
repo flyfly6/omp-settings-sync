@@ -18,6 +18,13 @@ export declare function countAheadBehind(upstream: string, dir: string): Promise
 }>;
 export declare function fetchOrigin(dir: string): Promise<boolean>;
 export declare function isRemoteReachable(dir: string): Promise<boolean>;
+/**
+ * Drop legacy skip-worktree bits left on tracked files (the pre-0.2 way of freezing `mcp.json`).
+ * The plugin never sets the bit, but an inherited one on a file whose worktree copy drifted makes
+ * `git reset --hard` abort with "Entry '<path>' not uptodate. Cannot merge." instead of discarding
+ * local state. Returns the paths that were cleared.
+ */
+export declare function clearSkipWorktree(dir: string): Promise<string[]>;
 export declare function integrateUpstream(upstream: string, dir: string): Promise<boolean>;
 export declare function pushOrigin(first: boolean | undefined, dir: string): Promise<boolean>;
 export declare function hasLocalChanges(dir?: string): Promise<boolean>;

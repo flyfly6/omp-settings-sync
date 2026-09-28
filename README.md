@@ -86,6 +86,7 @@ Synchronization is fully automated:
 | `/ompsync sync` | Commit, fetch, integrate remote changes (rebase), and push with progress indicator |
 | `/ompsync push` | Commit and push local changes without pulling |
 | `/ompsync pull` | Fetch and rebase remote updates |
+| `/ompsync reset` | Discard local commits and changes, reset to the remote branch (also discharges any stranded `git update-index --skip-worktree` freeze that would block the reset) |
 | `/ompsync plugins` | Show how the declared plugins differ from this machine (nothing is modified) |
 | `/ompsync plugins install` | Install/enable the declared plugins on this machine via the `omp` CLI |
 | `/ompsync unlock [passphrase]` | Decrypt credentials vault and restore local `auth.json` |
