@@ -13,6 +13,8 @@ export declare function runLink(arg: string, ctx?: Ctx, deps?: Deps, options?: {
     password?: string;
 }): Promise<void>;
 export declare function showStatus(ctx: Ctx, deps?: Deps): Promise<void>;
+export declare function showPluginPlan(ctx: Ctx, deps?: Deps): Promise<void>;
+export declare function runPluginInstall(ctx: Ctx, deps?: Deps): Promise<void>;
 export declare function runReset(ctx: Ctx, deps?: Deps): Promise<void>;
 export declare function runSync(ctx: Ctx, options: {
     auto: boolean;

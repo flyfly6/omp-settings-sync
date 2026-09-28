@@ -6,7 +6,7 @@
 
 ## Harness
 
-- Tests live in `test/*.test.ts`, one file per module or concern: `config`, `security`, `vault`, `filter`, `git-ops`, `lock`, `progress`, `extension`, `cross-platform`, `mcp-sync`, `end-to-end`.
+- Tests live in `test/*.test.ts`, one file per module or concern: `config`, `security`, `vault`, `filter`, `git-ops`, `lock`, `progress`, `extension`, `cross-platform`, `mcp-sync`, `plugins`, `end-to-end`.
 - Imports: `node:test`, `node:assert/strict`, and the code under test via relative ESM specifiers that keep the `.js` extension: `import { runInit } from "../src/sync.js"`.
 - Execution path: `tsconfig.test.json` compiles `src/**` + `test/**` into `dist-test/` (`rootDir: "."`), then `node --test --test-concurrency=4 dist-test/test/*.test.js` runs the results. `dist-test/` is gitignored.
 
@@ -25,6 +25,8 @@ npm run typecheck                             # src and test, no emit
 - `createMachineFixture(name)` → `{ root, dir }`: a `mkdtemp` root with `agent/` containing `config.yml` (with `setupVersion`), `mcp.json`, `AGENTS.md`, `extensions/custom.ts`, and `auth.json`.
 - `createBareRemote(root, name = "origin.git")` → path to a local **bare** repository, used as `origin` by every end-to-end test.
 - On import it sets git author/committer environment variables and **deletes** `PI_SUBAGENT_DEPTH`, `OMP_SUBAGENT_DEPTH`, `OMP_IS_SUBAGENT`, so the subagent guard never suppresses sync in tests. Keep that block at the top of the module; a new helper file would have to repeat it.
+
+`test/plugins.test.ts` adds two file-local conventions: it deletes `XDG_DATA_HOME` (the plugin-root probe consults it) and writes the plugin registry as a *sibling* of the fixture agent dir (`<root>/plugins/{package.json,omp-plugins.lock.json}`) so the default `dirname(agentDir)/plugins` probe resolves naturally. The real `omp` CLI is never spawned in tests — `deps.omp` records argv and returns `{ stdout: "" }`.
 
 Conventions to follow:
 

@@ -39,6 +39,23 @@ test("readConfig parses JSONC with comments and validates safe extraPaths, exclu
   assert.deepEqual(config.machineLocalSettings, ["setupVersion", "dev.autoqaConsent"]);
 });
 
+test("readConfig normalizes the plugin keys and drops unusable values", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-config-plugins-"));
+  await fs.writeFile(
+    path.join(tempDir, "omp-sync.jsonc"),
+    `{\n  "machineLocalPlugins": ["win-only", "", 42],\n  "pluginsDir": "  ~/.omp/plugins  "\n}\n`
+  );
+
+  const config = await readConfig({ dir: tempDir });
+  assert.deepEqual(config.machineLocalPlugins, ["win-only"]);
+  assert.equal(config.pluginsDir, "~/.omp/plugins");
+
+  await fs.writeFile(path.join(tempDir, "omp-sync.jsonc"), `{\n  "pluginsDir": "   ",\n  "machineLocalPlugins": "not-an-array"\n}\n`);
+  const empty = await readConfig({ dir: tempDir });
+  assert.equal(empty.pluginsDir, undefined);
+  assert.equal(empty.machineLocalPlugins, undefined);
+});
+
 test("readConfig tolerates trailing commas and reports config files it cannot parse", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-config-lenient-"));
   const warnings: string[] = [];

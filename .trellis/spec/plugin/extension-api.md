@@ -35,9 +35,9 @@ const cleanArg = arg.replace(/\b(--force|--fresh|-f)\b/gi, "").trim();
 ```
 
   Follow this two-step pattern (`test` for the flag, `replace` to remove it). Never split arguments positionally — a remote URL may legitimately contain dashes.
-- `vault` is the only command with subcommands (`enable|disable|unlock|lock|status`); its default is `status`.
+- `vault` is the only command with subcommands (`enable|disable|unlock|lock|status`); its default is `status`. `plugins` is the second: `install` (alias `apply`) applies the declaration, anything else shows the plan, and only an unknown subcommand throws (`Unknown plugins subcommand. Usage: /ompsync plugins [install]`).
 - Unknown command/subcommand → `throw new Error("… Usage: /ompsync [...]")`. The usage string is the contract shown to users, so extend it when adding a command.
-- `getArgumentCompletions(prefix)` returns `{ value, label }[]` or `null`; `vault …` completions are a separate branch. New commands must be added to the plain list.
+- `getArgumentCompletions(prefix)` returns `{ value, label }[]` or `null`; `vault …` and `plugins …` completions are separate branches. New commands must be added to the plain list.
 
 ## Error Handling
 
@@ -80,6 +80,7 @@ One try/catch wraps the handler:
 
 - Returns early for `reason === "reload"` and for subagent children.
 - Runs the exit sync **detached** (`void (async () => { … })()`) and swallows errors. Comment in the source explains why: omp allows ~2 s for shutdown handlers while commit+push takes seconds; the pending git child keeps the process alive, and anything unpushed is retried by the next start or tick. Do not convert this to `await`.
+- No lifecycle path (start, tick, shutdown) ever installs or enables a plugin: `prepareCommit` only *writes* `plugins.json`, and the apply path runs exclusively from the `/ompsync plugins install` command. Do not move `applyPluginPlan` behind a hook, a pull, or `runLink`.
 
 ## Testing The Boundary
 

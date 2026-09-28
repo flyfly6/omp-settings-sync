@@ -6,6 +6,7 @@ import { ensureAttributes, ensureFilter, mcpServersMissingLocalValues, refreshMa
 import { remoteFromArg } from "./remote.js";
 import { countAheadBehind, fetchOrigin, getConflictState, getSyncDivergence, git, gitRaw, hasCommits, hasDotGit, hasLocalChanges, hasRemoteChanges, integrateUpstream, isRemoteReachable, isSyncableRepo, pushOrigin, upstreamRef, } from "./git.js";
 import { isSubagentChild, shouldCheckRemote, withLock, writeSyncState } from "./lock.js";
+import { applyPluginPlan, describePluginAction, PLUGIN_MANIFEST_FILE, pluginCommand, pluginPlan, readLocalPlugins, readPluginManifest, refreshPluginManifest, } from "./plugins.js";
 import { ensureIgnoreRules, ensureInfoExclude, isDenied, stagedSecretFiles, trackedSecretFiles, } from "./security.js";
 import { cacheVaultPassword, clearCachedVaultPassword, decryptPayload, deleteVaultFile, encryptPayload, getCachedVaultPassword, getVaultStatus, hasSensitiveChanges, hasVaultFile, hashSensitiveFiles, packSensitiveFiles, readVaultFile, saveSensitiveHash, SYNCABLE_SENSITIVE_FILES, unpackSensitiveFiles, writeVaultFile, } from "./vault.js";
 export const STATUS_KEY = "omp-git-sync";
@@ -53,6 +54,7 @@ export async function prepareCommit(deps, ctx) {
     await ensureAttributes(dir);
     await ensureFilter(dir, config);
     await refreshMachineSidecar(dir, config);
+    await refreshPluginManifest(dir, config, deps);
     // If vault is enabled and unlocked on this machine, update vault.enc ONLY IF sensitive files changed
     const vaultStatus = await getVaultStatus(dir);
     if (vaultStatus === "unlocked") {
@@ -389,6 +391,68 @@ export async function showStatus(ctx, deps) {
         lines.push(`   Remove from git index: git rm --cached <file>`);
     }
     notify(ctx, lines.join("\n"), conflicts.hasConflicts || bad.length ? "warning" : "info", deps);
+}
+export async function showPluginPlan(ctx, deps) {
+    const dir = dirOf(deps);
+    const config = await readConfig(deps, ctx);
+    const declared = await readPluginManifest(dir, deps, ctx);
+    if (!declared) {
+        notify(ctx, `omp-sync: no ${PLUGIN_MANIFEST_FILE} in this repository. Run '/ompsync sync' on a machine that has plugins installed.`, "warning", deps);
+        return;
+    }
+    const local = await readLocalPlugins(dir, config);
+    if (!local) {
+        notify(ctx, "omp-sync: no plugin registry on this machine; nothing to compare.", "warning", deps);
+        return;
+    }
+    const actions = pluginPlan(declared, local);
+    if (!actions.length) {
+        notify(ctx, "omp-sync: installed plugins already match the declaration.", "info", deps);
+        return;
+    }
+    const applyable = actions.some((action) => pluginCommand(action) !== undefined);
+    const lines = [
+        "📦 Plugin declaration vs this machine:",
+        ...actions.map((action) => `   • ${describePluginAction(action)}`),
+    ];
+    if (applyable)
+        lines.push("👉 Apply with: /ompsync plugins install");
+    notify(ctx, lines.join("\n"), "info", deps);
+}
+export async function runPluginInstall(ctx, deps) {
+    const dir = dirOf(deps);
+    const config = await readConfig(deps, ctx);
+    const declared = await readPluginManifest(dir, deps, ctx);
+    if (!declared) {
+        throw new Error(`no ${PLUGIN_MANIFEST_FILE} in this repository. Run '/ompsync sync' on a machine that has plugins installed.`);
+    }
+    const local = await readLocalPlugins(dir, config);
+    if (!local) {
+        throw new Error("no plugin registry on this machine to install into.");
+    }
+    const pending = pluginPlan(declared, local).filter((action) => pluginCommand(action) !== undefined);
+    if (!pending.length) {
+        notify(ctx, "omp-sync: nothing to install; plugins already match the declaration.", "info", deps);
+        return;
+    }
+    // The explicit command is the consent; an interactive session gets one extra confirmation.
+    if (ctx?.hasUI && ctx.ui && typeof ctx.ui.confirm === "function") {
+        const plan = pending.map((action) => `   • ${describePluginAction(action)}`).join("\n");
+        const ok = await ctx.ui.confirm("Install Plugins", `Run these plugin changes now?\n${plan}`);
+        if (!ok) {
+            notify(ctx, "omp-sync: plugin install cancelled.", "info", deps);
+            return;
+        }
+    }
+    notify(ctx, `omp-sync: applying ${pending.length} plugin action(s)…`, "info", deps);
+    const results = await applyPluginPlan(pending, deps);
+    const failures = results.filter((result) => result.error);
+    for (const failure of failures) {
+        notify(ctx, `omp-sync: ${describePluginAction(failure.action)} failed: ${failure.error}`, "warning", deps);
+    }
+    notify(ctx, failures.length
+        ? `omp-sync: ${results.length - failures.length}/${results.length} plugin actions applied, ${failures.length} failed.`
+        : `omp-sync: ${results.length} plugin action(s) applied. Run /reload to load them.`, failures.length ? "warning" : "info", deps);
 }
 export async function runReset(ctx, deps) {
     const dir = dirOf(deps);

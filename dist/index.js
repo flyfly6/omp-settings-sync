@@ -1,7 +1,7 @@
 import { dirOf } from "./config.js";
 import { countAheadBehind, isSyncableRepo, pushOrigin, upstreamRef } from "./git.js";
 import { isSubagentChild, withLock, writeSyncState } from "./lock.js";
-import { checkAndBackgroundSync, commitLocalChanges, prepareCommit, runDisableVault, runEnableVault, runInit, runLink, runLockVault, runReset, runSync, runUnlockVault, showStatus, } from "./sync.js";
+import { checkAndBackgroundSync, commitLocalChanges, prepareCommit, runDisableVault, runEnableVault, runInit, runLink, runLockVault, runPluginInstall, runReset, runSync, runUnlockVault, showPluginPlan, showStatus, } from "./sync.js";
 const BACKGROUND_SYNC_INTERVAL_MS = 60_000; // 1 minute
 export default function gitSyncExtension(pi) {
     pi.setLabel("OMP Config Git Sync");
@@ -33,6 +33,16 @@ export default function gitSyncExtension(pi) {
                     const discardLocal = /\b(--discard-local|--force|-f|--hard)\b/i.test(arg);
                     return runSync(ctx, { auto: false, push: false, discardLocal });
                 }
+                if (command === "plugins") {
+                    const [subcommand = "status"] = arg.trim().split(/\s+/).filter(Boolean);
+                    if (subcommand === "install" || subcommand === "apply") {
+                        return runPluginInstall(ctx);
+                    }
+                    if (subcommand === "status") {
+                        return showPluginPlan(ctx);
+                    }
+                    throw new Error("Unknown plugins subcommand. Usage: /ompsync plugins [install]");
+                }
                 if (command === "unlock") {
                     return runUnlockVault(arg || undefined, ctx);
                 }
@@ -59,7 +69,7 @@ export default function gitSyncExtension(pi) {
                     }
                     throw new Error("Unknown vault subcommand. Usage: /ompsync vault [enable|disable|unlock|lock|status]");
                 }
-                throw new Error("Unknown command. Usage: /ompsync [init <url>|link <url>|status|sync|reset|push|pull|unlock|lock|vault]");
+                throw new Error("Unknown command. Usage: /ompsync [init <url>|link <url>|status|sync|reset|push|pull|plugins [install]|unlock|lock|vault]");
             });
         }
         catch (error) {
@@ -77,7 +87,13 @@ export default function gitSyncExtension(pi) {
                     .filter((x) => x.value.startsWith(trimmed));
                 return subEntries.length ? subEntries : null;
             }
-            const entries = ["init", "link", "status", "sync", "reset", "push", "pull", "unlock", "lock", "vault"]
+            if (trimmed.startsWith("plugins ")) {
+                const subEntries = ["install"]
+                    .map((sub) => ({ value: `plugins ${sub}`, label: `plugins ${sub}` }))
+                    .filter((x) => x.value.startsWith(trimmed));
+                return subEntries.length ? subEntries : null;
+            }
+            const entries = ["init", "link", "status", "sync", "reset", "push", "pull", "plugins", "unlock", "lock", "vault"]
                 .map((value) => ({ value, label: value }))
                 .filter((x) => x.value.startsWith(prefix.trim()));
             return entries.length ? entries : null;

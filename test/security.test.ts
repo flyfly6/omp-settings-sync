@@ -43,6 +43,7 @@ test("isDenied blocks all secrets, databases, runtime state, and local credentia
     "AGENTS.md",
     "Agents.md",
     "omp-sync.jsonc",
+    "plugins.json",
     ".gitignore",
     ".gitattributes",
     "extensions/tps.ts",
@@ -69,6 +70,7 @@ test("ensureIgnoreRules writes managed block preserving user rules", async () =>
   assert.ok(content.includes("!config.yml"));
   assert.ok(content.includes("!mcp.json"));
   assert.ok(content.includes("!AGENTS.md"));
+  assert.ok(content.includes("!plugins.json"));
   assert.ok(content.includes("*.db*"));
   assert.ok(content.includes("*.local-backup"));
 });
@@ -80,5 +82,8 @@ test("ensureIgnoreRules drops excluded allowlist entries and keeps the rest", as
 
   assert.ok(content.includes("!config.yml"));
   assert.ok(!content.includes("!mcp.json"), "an excluded file must not be allowlisted");
-  assert.ok(!content.includes("!plugins"), "an excluded directory must not be allowlisted");
+
+  const lines = content.split("\n").map((line) => line.trim());
+  assert.ok(!lines.includes("!plugins") && !lines.includes("!plugins/"), "an excluded directory must not be allowlisted");
+  assert.ok(lines.includes("!plugins.json"), "excluding the legacy plugins directory must keep the declaration");
 });

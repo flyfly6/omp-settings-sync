@@ -12,17 +12,18 @@ Verified shape of the codebase:
 
 | Module | Lines | Responsibility |
 | :--- | ---: | :--- |
-| `src/sync.ts` | 806 | Orchestrators (`runInit`, `runLink`, `runSync`, `runReset`, `showStatus`, vault commands), commit pipeline, progress/notify helpers |
+| `src/sync.ts` | 897 | Orchestrators (`runInit`, `runLink`, `runSync`, `runReset`, `showStatus`, `showPluginPlan`, `runPluginInstall`, vault commands), commit pipeline, progress/notify helpers |
 | `src/filter.ts` | 409 | Git clean/smudge drivers, generated `.git-sync/filter.mjs`, machine-local sidecars, MCP field handling |
-| `src/vault.ts` | 297 | AES-256-GCM credentials vault, password cache, sensitive-file hashing |
-| `src/config.ts` | 242 | Agent-dir resolution, `omp-sync.jsonc` parsing, machine-local key defaults, UI/deps types |
+| `src/vault.ts` | 297 | AES-256-GCM credentials vault, password cache, sensitive-file hashing, `atomicWriteFile` |
+| `src/plugins.ts` | 268 | Plugin declaration mirror (`plugins.json`), plugin-root discovery, plan/apply through the `omp` CLI |
+| `src/config.ts` | 262 | Agent-dir resolution, `omp-sync.jsonc` parsing, machine-local key defaults, UI/deps types |
 | `src/git.ts` | 237 | The only place that spawns `git`; environment, timeouts, divergence and conflict helpers |
-| `src/security.ts` | 204 | Allowlist, hard denylist, managed `.gitignore` block, staged/tracked secret scanners |
-| `src/index.ts` | 175 | Extension boundary: command registration, lifecycle hooks, background tick |
+| `src/security.ts` | 205 | Allowlist, hard denylist, managed `.gitignore` block, staged/tracked secret scanners |
+| `src/index.ts` | 193 | Extension boundary: command registration, lifecycle hooks, background tick |
 | `src/lock.ts` | 152 | In-process mutex + cross-process lock file, sync state, subagent detection |
 | `src/remote.ts` | 47 | Remote address parsing (`owner/repo`, HTTPS, scp-style SSH, local paths) |
 
-Tests: `test/*.test.ts` (1 164 lines, `node:test`), fixtures in `test/helpers.ts`.
+Tests: `test/*.test.ts` (1 427 lines, `node:test`), fixtures in `test/helpers.ts`.
 
 ---
 
@@ -34,6 +35,7 @@ Before writing code, read the topic file(s) for the area you are changing:
 - [ ] [`extension-api.md`](./extension-api.md) — anything touching `src/index.ts`: commands, events, `ctx`, notifications, progress, lifecycle timing.
 - [ ] [`sync-engine.md`](./sync-engine.md) — anything touching `src/sync.ts` or `src/git.ts`: commit/fetch/integrate/push order, error policy, push races.
 - [ ] [`machine-local-sync.md`](./machine-local-sync.md) — allowlisted files whose contents partially stay local: `.gitattributes` filters, `filter.mjs`, sidecars, `mcp.json`, `config.yml`, `settings.json`.
+- [ ] [`plugin-declarations.md`](./plugin-declarations.md) — anything touching `src/plugins.ts`: `plugins.json`, plugin-root discovery, plan/apply through the `omp` CLI.
 - [ ] [`security-guards.md`](./security-guards.md) — anything that can change what gets committed: allowlist, denylist, ignore block, scanners.
 - [ ] [`credentials-vault.md`](./credentials-vault.md) — `vault.enc` format, passphrase cache, sensitive-file set.
 - [ ] [`configuration.md`](./configuration.md) — `omp-sync.jsonc` keys, defaults, lenient parsing, agent-dir resolution.

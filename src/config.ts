@@ -13,6 +13,8 @@ export interface OmpSyncConfig {
   machineLocalYamlKeys?: string[];
   machineLocalMcpFields?: string[];
   machineLocalMcpServers?: string[];
+  machineLocalPlugins?: string[];
+  pluginsDir?: string;
   preferRemote?: boolean;
   discardLocalOnConflict?: boolean;
 }
@@ -23,6 +25,8 @@ export type Level = "info" | "warning" | "error";
 export interface Deps {
   dir?: string;
   notify?: (message: string, level: Level) => void;
+  /** Test seam: replaces the real `omp` child process used by the plugin commands. */
+  omp?: (args: string[], cwd?: string) => Promise<{ stdout: string }>;
 }
 
 export interface UIContext {
@@ -67,14 +71,19 @@ export const DEFAULT_MACHINE_LOCAL_YAML = [
 /** MCP server fields whose values differ per machine (absolute paths, npx/vendor shims, Windows-only env). */
 export const DEFAULT_MACHINE_LOCAL_MCP_FIELDS = ["command", "args", "env"];
 
+/** Expand a leading `~` and resolve to an absolute path. */
+export function expandUserPath(value: string): string {
+  if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.resolve(path.join(os.homedir(), value.slice(2)));
+  }
+  return path.resolve(value);
+}
+
 export function dirOf(deps?: Deps): string {
   if (deps?.dir) return path.resolve(deps.dir);
   const explicit = process.env.PI_CODING_AGENT_DIR?.trim();
   if (explicit) {
-    if (explicit === "~" || explicit.startsWith("~/") || explicit.startsWith("~\\")) {
-      return path.resolve(path.join(os.homedir(), explicit.slice(2)));
-    }
-    return path.resolve(explicit);
+    return expandUserPath(explicit);
   }
   const profile = process.env.OMP_PROFILE?.trim();
   if (profile) {
@@ -135,7 +144,7 @@ export async function readConfigFile(dir: string): Promise<string | undefined> {
 
 const warnedConfigIssues = new Set<string>();
 
-function warnConfigIssue(deps: Deps | undefined, ctx: Ctx, message: string): void {
+export function warnConfigIssue(deps: Deps | undefined, ctx: Ctx, message: string): void {
   if (warnedConfigIssues.has(message)) return;
   warnedConfigIssues.add(message);
   if (deps?.notify) deps.notify(message, "warning");
@@ -230,6 +239,15 @@ export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig>
     );
   }
 
+  let machineLocalPlugins: string[] | undefined;
+  if (Array.isArray(raw.machineLocalPlugins)) {
+    machineLocalPlugins = raw.machineLocalPlugins.filter(
+      (key): key is string => typeof key === "string" && key.trim() !== ""
+    );
+  }
+
+  const pluginsDir = typeof raw.pluginsDir === "string" && raw.pluginsDir.trim() !== "" ? raw.pluginsDir.trim() : undefined;
+
   return {
     ...raw,
     extraPaths: extras,
@@ -238,5 +256,7 @@ export async function readConfig(deps?: Deps, ctx?: Ctx): Promise<OmpSyncConfig>
     machineLocalYamlKeys,
     machineLocalMcpFields,
     machineLocalMcpServers,
+    machineLocalPlugins,
+    pluginsDir,
   };
 }

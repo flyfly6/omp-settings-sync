@@ -13,9 +13,11 @@ Everything the plugin writes lives in one of two places inside the managed direc
 
 | Path | Committed? | Purpose |
 | :--- | :--- | :--- |
-| allowlisted files/dirs (`config.yml`, `mcp.json`, `settings.json`, `AGENTS.md`, `vault.enc`, `extensions/`, `skills/`, `agents/`, …) | yes | The synced payload (`src/security.ts:DEFAULT_ALLOWED_PATHS`) |
+| allowlisted files/dirs (`config.yml`, `mcp.json`, `settings.json`, `AGENTS.md`, `vault.enc`, `plugins.json`, `extensions/`, `skills/`, `agents/`, …) | yes | The synced payload (`src/security.ts:DEFAULT_ALLOWED_PATHS`) |
 | `.git-sync/` | no — hard-denied | `filter.mjs`, `vault.key`, `sensitive.hash`, `settings.machine.json`, `config.machine.yml`, `mcp.machine.json`, `lock`, `state.json` |
 | runtime state (`sessions/`, `state/`, `cache/`, `logs/`, `*.db*`) | no — hard-denied | Owned by omp itself |
+
+`plugins.json` is the one allowlisted file whose *source* lives outside the managed directory: it mirrors the installed-plugin declarations from `<config dir root>/plugins` (a sibling of the agent dir) and carries no git filter, because machine-local entries (linked paths, local specs, `machineLocalPlugins`) are omitted instead of stripped. The plugin root itself is never written — apply actions go through the `omp` CLI.
 
 `.git-sync/` is regenerated/refreshed by the plugin on every `prepareCommit()` call (`src/filter.ts:ensureFilter`, `refreshMachineSidecar`; `src/lock.ts:writeSyncState`).
 
@@ -26,11 +28,12 @@ Everything the plugin writes lives in one of two places inside the managed direc
 ```
 index.ts        extension boundary: commands + lifecycle hooks
    │
-   ├── sync.ts        orchestrators (init / link / sync / reset / status / vault)
+   ├── sync.ts        orchestrators (init / link / sync / reset / status / vault / plugins)
    │      ├── filter.ts   git drivers, filter.mjs, machine sidecars
    │      ├── security.ts allowlist/denylist, ignore block, secret scanners
    │      ├── vault.ts    AES-256-GCM payload, password cache, hashes
    │      ├── remote.ts   remote address parsing
+   │      ├── plugins.ts  plugin declaration mirror + `omp` CLI apply path
    │      ├── git.ts      the only git subprocess wrapper
    │      ├── lock.ts     mutex, lock file, state.json, subagent guard
    │      └── config.ts   agent dir + omp-sync.jsonc
@@ -42,6 +45,7 @@ index.ts        extension boundary: commands + lifecycle hooks
 Rules that follow from this shape:
 
 - **Only `git.ts` spawns git.** Every other module calls `git(args, dir, timeout?)`, `gitRaw()`, or a typed helper from `src/git.ts`. Adding an `execFile("git", …)` elsewhere duplicates `gitEnv()` (ceiling directory, prompt suppression, author identity) and breaks the isolation guarantees.
+- **Only `plugins.ts` spawns `omp`** (a fixed argv via `execFile`, never a shell), and only for the four mutating plugin actions. `deps.omp` is the test seam; the snapshot path never shells out at all, so a machine without the CLI still syncs its declarations.
 - **`vault.ts` is a leaf.** It imports only `node:crypto`, `node:fs/promises`, `node:path`. Keep it that way: it is the module whose correctness matters most, and it must stay testable without git or config.
 - **`remote.ts` is pure.** Two functions, no I/O. Parsing rules belong here, not in `sync.ts`.
 - **`config.ts` ↔ `security.ts` is a real import cycle.** `config.ts` imports `DEFAULT_ALLOWED_PATHS`/`isDenied`, `security.ts` imports `isValidExtraPath`. It is safe only because both modules reference each other **inside function bodies** (`readConfig`, `isValidExtraPath`, `ensureIgnoreRules`), never during module evaluation. Do not introduce a top-level `const` that reads the other module's binding.
@@ -79,6 +83,7 @@ Details and the per-key plumbing live in [`machine-local-sync.md`](./machine-loc
 | Ignore/deny decision | `src/security.ts` | See the multi-site change map before editing |
 | Machine-local filtering | `src/filter.ts` (+ key defaults in `src/config.ts`) | The filter script and the sidecar must agree |
 | Credentials handling | `src/vault.ts` | Never let plaintext leave `vault.enc` |
+| Plugin declaration / `omp` CLI action | `src/plugins.ts` | Keep the snapshot read-only; never hand-edit `<config root>/plugins` |
 | New config key | `src/config.ts` | Plus consumer, README, and a `test/config.test.ts` case |
 
-Avoid new files: all nine modules have an established owner for their concerns, and `src/*.ts` is the shipped surface (`files` in `package.json` includes `src`, but `omp.extensions` points at `dist/index.js`).
+Avoid new files: all ten modules have an established owner for their concerns, and `src/*.ts` is the shipped surface (`files` in `package.json` includes `src`, but `omp.extensions` points at `dist/index.js`).

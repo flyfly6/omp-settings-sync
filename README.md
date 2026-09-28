@@ -18,6 +18,7 @@ The agent directory (`~/.omp/agent` or `~/.omp/profiles/<profile>/agent`) **is**
 - 🛡️ **4-Tier Security Guards:** Inverted allowlist `.gitignore`, local `.git/info/exclude`, pre-commit staging blocker, and tracked file scanner ensuring plaintext secrets, tokens, and SQLite databases (`agent.db*`, `models.db*`, `history.db*`) are never committed.
 - ⚙️ **Dual YAML & JSON Clean/Smudge Filter:** Machine-local settings (`images.urls.credentials`, `dev.autoqaPush.token`, `searxng.*`, `hindsight.*`, `auth.broker.*`, `setupVersion`, `shellPath`, etc.) are stripped from commits and preserved in local sidecars.
 - 🧩 **Cross-Platform MCP Sync:** `mcp.json` syncs server registrations between Windows, macOS, and Linux, while `command`, `args`, and `env` (absolute paths, `cmd /c npx` vs `npx`) stay machine-local in `.git-sync/mcp.machine.json` and are merged back on every checkout.
+- 📦 **Plugin Declaration Sync:** `plugins.json` records the install spec and enabled state of every plugin installed from a portable source, and `/ompsync plugins install` replays it on another machine. Plugin settings values, local-path plugins, and package-manager state (`bun.lock`, `node_modules/`) never sync, and no plugin is ever installed automatically.
 - 🚀 **Bring Your Own Git Remote:** Any git URL works — GitHub, GitLab, or self-hosted, over SSH, HTTPS, or a local path. `/ompsync init <url>` and `/ompsync link <url>` always take the repository address explicitly; no GitHub CLI, no implicit repository creation.
 - 🔄 **Graceful Onboarding:** Linking on a new device without entering a password syncs all unencrypted configuration smoothly without errors; unlock your encrypted vault anytime via `/ompsync unlock`.
 
@@ -85,6 +86,8 @@ Synchronization is fully automated:
 | `/ompsync sync` | Commit, fetch, integrate remote changes (rebase), and push with progress indicator |
 | `/ompsync push` | Commit and push local changes without pulling |
 | `/ompsync pull` | Fetch and rebase remote updates |
+| `/ompsync plugins` | Show how the declared plugins differ from this machine (nothing is modified) |
+| `/ompsync plugins install` | Install/enable the declared plugins on this machine via the `omp` CLI |
 | `/ompsync unlock [passphrase]` | Decrypt credentials vault and restore local `auth.json` |
 | `/ompsync lock` | Clear cached vault key from local machine memory and cache |
 | `/ompsync vault enable [passphrase]` | Enable encrypted credentials vault and encrypt `auth.json` |
@@ -109,6 +112,7 @@ Synchronization is fully automated:
 - `AGENTS.md` / `Agents.md`: Global instructions and directives
 - `extensions/`, `skills/`, `agents/`, `chains/`, `prompts/`, `themes/`, `plugins/`: Custom resources
 - `.gitignore`, `.gitattributes`, `omp-sync.jsonc`: Sync policy
+- `plugins.json`: Installed plugin declarations (install spec + enabled state, no settings values)
 - `excludePaths` in `omp-sync.jsonc` removes any of the entries above from the sync set (for example keep a machine-specific `models.yml` local by excluding it)
 
 ### What Syncs Encrypted (Vault)
@@ -139,6 +143,31 @@ Synchronization is fully automated:
 
 ---
 
+## Plugins Across Machines
+
+`plugins.json` (committed, in the agent directory) declares every plugin installed from a portable source:
+
+```json
+{
+  "version": 1,
+  "plugins": {
+    "omp-settings-sync": {
+      "spec": "github:flyfly6/omp-settings-sync",
+      "enabled": true,
+      "enabledFeatures": null
+    }
+  }
+}
+```
+
+- It is refreshed by the same call that prepares every commit, reading `<config dir root>/plugins/package.json` + `omp-plugins.lock.json` (`~/.omp/plugins` by default, `$XDG_DATA_HOME/omp/plugins` under XDG). It is written only when its bytes change, so an unchanged machine produces no diff, and a machine with no plugin registry keeps the declaration it pulled.
+- **Nothing is installed automatically.** `/ompsync plugins` prints the differences — missing locally, enabled/disabled, feature sets, spec drift, installed here only — and `/ompsync plugins install` performs the actionable ones through `omp plugin install|enable|disable|features`, asking once for confirmation when the UI supports it.
+- Local-only entries never sync: plugins installed with `omp plugin link <path>`, specs that are paths or `file:`/`link:`/`workspace:` references, and every name listed in `machineLocalPlugins`.
+- An install-spec difference is reported, never applied — reinstalling would clobber a locally upgraded plugin. `enabledFeatures: null` means the plugin keeps its default features; an explicit empty list is recorded but not replayed, because the CLI cannot set an empty feature set.
+- Plugin settings values (`omp plugin config set`) are never written to the repository. `bun.lock`, `node_modules/`, and `installed_plugins.json` have no portable meaning across machines and are not synced either.
+
+---
+
 ## Configuration (`omp-sync.jsonc`)
 
 Create `~/.omp/agent/omp-sync.jsonc` (or `git-sync.jsonc`):
@@ -160,7 +189,11 @@ Create `~/.omp/agent/omp-sync.jsonc` (or `git-sync.jsonc`):
   // Defaults: ["command", "args", "env"]. Use [] to sync MCP launchers verbatim.
   "machineLocalMcpFields": ["command", "args", "env"],
   // Server entries that exist on this machine only.
-  "machineLocalMcpServers": ["win-only-tool"]
+  "machineLocalMcpServers": ["win-only-tool"],
+  // Plugins that exist on this machine only: never written to plugins.json, never reported as missing.
+  "machineLocalPlugins": ["win-only-plugin"],
+  // Only needed when the plugin registry is not at <config dir root>/plugins (custom PI_CODING_AGENT_DIR, XDG).
+  "pluginsDir": "~/.omp/plugins"
 }
 ```
 

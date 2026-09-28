@@ -24,6 +24,7 @@ export const DEFAULT_ALLOWED_PATHS = [
   "omp-sync.json",
   "git-sync.jsonc",
   "git-sync.json",
+  "plugins.json",
   "vault.enc",
   ".vault.enc",
   "extensions",

@@ -16,6 +16,8 @@
 
 `ensureAttributes` is idempotent and migration-aware: it preserves unrelated attribute lines, drops any `filter=` rule on a file this plugin owns (older releases routed `mcp.json` through the JSON driver, which leaked launcher commands into commits), appends missing rules, and then re-normalizes only the tracked files (`git ls-files -- <files>` → a single `git add --renormalize`).
 
+`plugins.json` deliberately has **no** driver: its machine-local half (linked plugins, local-path specs, `machineLocalPlugins`) is left out of the file by construction, so there is nothing for `clean`/`smudge` to strip or restore. Do not route it through a driver — a filter here would only add a way for a local mirror's launcher data to reach a commit. See [`plugin-declarations.md`](./plugin-declarations.md).
+
 Git filter config is written by `ensureFilter` under `filter.omp-config-sync-<driver>.{clean,smudge,required}`. Values are shell-quoted absolutes with forward slashes:
 
 ```

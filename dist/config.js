@@ -25,15 +25,19 @@ export const DEFAULT_MACHINE_LOCAL_YAML = [
 ];
 /** MCP server fields whose values differ per machine (absolute paths, npx/vendor shims, Windows-only env). */
 export const DEFAULT_MACHINE_LOCAL_MCP_FIELDS = ["command", "args", "env"];
+/** Expand a leading `~` and resolve to an absolute path. */
+export function expandUserPath(value) {
+    if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
+        return path.resolve(path.join(os.homedir(), value.slice(2)));
+    }
+    return path.resolve(value);
+}
 export function dirOf(deps) {
     if (deps?.dir)
         return path.resolve(deps.dir);
     const explicit = process.env.PI_CODING_AGENT_DIR?.trim();
     if (explicit) {
-        if (explicit === "~" || explicit.startsWith("~/") || explicit.startsWith("~\\")) {
-            return path.resolve(path.join(os.homedir(), explicit.slice(2)));
-        }
-        return path.resolve(explicit);
+        return expandUserPath(explicit);
     }
     const profile = process.env.OMP_PROFILE?.trim();
     if (profile) {
@@ -99,7 +103,7 @@ export async function readConfigFile(dir) {
     return undefined;
 }
 const warnedConfigIssues = new Set();
-function warnConfigIssue(deps, ctx, message) {
+export function warnConfigIssue(deps, ctx, message) {
     if (warnedConfigIssues.has(message))
         return;
     warnedConfigIssues.add(message);
@@ -189,6 +193,11 @@ export async function readConfig(deps, ctx) {
     if (Array.isArray(raw.machineLocalMcpServers)) {
         machineLocalMcpServers = raw.machineLocalMcpServers.filter((key) => typeof key === "string" && key.trim() !== "");
     }
+    let machineLocalPlugins;
+    if (Array.isArray(raw.machineLocalPlugins)) {
+        machineLocalPlugins = raw.machineLocalPlugins.filter((key) => typeof key === "string" && key.trim() !== "");
+    }
+    const pluginsDir = typeof raw.pluginsDir === "string" && raw.pluginsDir.trim() !== "" ? raw.pluginsDir.trim() : undefined;
     return {
         ...raw,
         extraPaths: extras,
@@ -197,6 +206,8 @@ export async function readConfig(deps, ctx) {
         machineLocalYamlKeys,
         machineLocalMcpFields,
         machineLocalMcpServers,
+        machineLocalPlugins,
+        pluginsDir,
     };
 }
 //# sourceMappingURL=config.js.map

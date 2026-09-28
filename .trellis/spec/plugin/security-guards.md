@@ -29,7 +29,8 @@ The `key` substring rule deliberately over-blocks names like `keybindings.json`.
 
 ## Allowlist and Exclusions
 
-- `DEFAULT_ALLOWED_PATHS` (`src/security.ts`) is the sync set: `.gitignore`, `.gitattributes`, `config.yml|yaml`, `mcp.json`, `settings.json`, `AGENTS.md`/`Agents.md`, `omp-sync.jsonc|json`, `git-sync.jsonc|json`, `vault.enc`, `.vault.enc`, and the directories `extensions`, `skills`, `agents`, `chains`, `prompts`, `themes`, `plugins`.
+- `DEFAULT_ALLOWED_PATHS` (`src/security.ts`) is the sync set: `.gitignore`, `.gitattributes`, `config.yml|yaml`, `mcp.json`, `settings.json`, `AGENTS.md`/`Agents.md`, `omp-sync.jsonc|json`, `git-sync.jsonc|json`, `plugins.json`, `vault.enc`, `.vault.enc`, and the directories `extensions`, `skills`, `agents`, `chains`, `prompts`, `themes`, `plugins`.
+- `plugins.json` is the declaration mirror from [`plugin-declarations.md`](./plugin-declarations.md). It is allowlisted as a *file* while the `plugins` entry is the legacy in-agent installer directory (`path.join(getAgentDir(), "plugins")` in the host) — two different paths that must not be conflated, including in `excludePaths` tests.
 - `extraPaths` (config) are validated by `isValidExtraPath`: non-empty, no `..`, not absolute, and not denied. Invalid entries are dropped silently; missing this validation would let a user add a path the guards then refuse to commit, producing confusing failures.
 - `excludePaths` (config) removes an allowlisted entry from the sync set (both the `.gitignore` rules and the allowlist evaluation). An entry that is *not* syncable produces the warning `excludePaths entry "…" is not a syncable path; ignored`.
 - `ensureIgnoreRules` rewrites the managed block in place: everything outside `START_MARKER`/`END_MARKER` is preserved, current and two legacy marker pairs (`pi-config-sync`, `pi-git-sync`) are stripped before re-adding, so repeated runs are idempotent.

@@ -18,7 +18,7 @@ A single-package Oh My Pi (omp) **extension** published to npm as `omp-settings-
 
 | Layer | Entry point | Covers |
 | :--- | :--- | :--- |
-| `plugin/` | [`plugin/index.md`](./plugin/index.md) | All product code: extension boundary, sync engine, git layer, machine-local filters, security guards, vault, configuration, platform behaviour, tests |
+| `plugin/` | [`plugin/index.md`](./plugin/index.md) | All product code: extension boundary, sync engine, git layer, machine-local filters, security guards, vault, plugin declarations, configuration, platform behaviour, tests |
 | `guides/` | [`guides/index.md`](./guides/index.md) | Cross-cutting thinking guides: multi-site changes and the local↔remote data flow |
 
 ---

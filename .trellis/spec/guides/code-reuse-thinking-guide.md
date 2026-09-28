@@ -41,6 +41,8 @@ Before writing a helper, check whether one of these already does it:
 | Validate a user-supplied path | `isValidExtraPath` in `src/config.ts` | a second `..`/absolute check |
 | Warn once about a config problem | `warnConfigIssue` | an ad-hoc `stderr.write` |
 | Instantiate a test machine | `createMachineFixture` / `createBareRemote` | new temp-dir boilerplate |
+| Read/write the plugin declaration | `readPluginManifest` / `readLocalPlugins` / `refreshPluginManifest` in `src/plugins.ts` | parsing `plugins.json` or `<plugin root>/package.json` yourself |
+| Run the `omp` CLI | `pluginCommand` + `applyPluginPlan` in `src/plugins.ts` (inject `deps.omp` in tests) | `execFile("omp", …)` anywhere else |
 
 ## Where Duplication Is Accepted
 

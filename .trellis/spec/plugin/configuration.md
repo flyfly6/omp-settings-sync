@@ -6,9 +6,9 @@
 
 ## Agent Directory Resolution
 
-`dirOf(deps?)` is the single source of truth for "where is the managed directory": `deps.dir` (used by every test and by internal callers) → `PI_CODING_AGENT_DIR` (with `~` expanded) → `~/.omp/profiles/<OMP_PROFILE>/agent` → `~/.omp/agent`, always `path.resolve`d.
+`dirOf(deps?)` is the single source of truth for "where is the managed directory": `deps.dir` (used by every test and by internal callers) → `PI_CODING_AGENT_DIR` (with `~` expanded) → `~/.omp/profiles/<OMP_PROFILE>/agent` → `~/.omp/agent`, always `path.resolve`d. `expandUserPath(value)` is the exported single representation of "expand a leading `~` and resolve"; reuse it instead of copying the prefix check (`dirOf` and `pluginsRoot`'s `pluginsDir` both go through it).
 
-Every public function takes `deps?: Deps` (`{ dir?, notify? }`) and `ctx?: Ctx`; production callers pass `ctx` for UI and tests pass `deps` for the directory and a notification collector. New code must keep that pair optional — no module may read the environment directly for the agent dir.
+Every public function takes `deps?: Deps` (`{ dir?, notify?, omp? }`) and `ctx?: Ctx`; production callers pass `ctx` for UI and tests pass `deps` for the directory, a notification collector, and (for the plugin apply path) an `omp` runner that replaces the real child process. New code must keep that pair optional — no module may read the environment directly for the agent dir.
 
 ## Config File
 
@@ -24,6 +24,8 @@ Every public function takes `deps?: Deps` (`{ dir?, notify? }`) and `ctx?: Ctx`;
 | `machineLocalYamlKeys` | string[] | `DEFAULT_MACHINE_LOCAL_YAML` (`setupVersion`, `shellPath`, `dev.autoqaPush.token`, `searxng.*`, `hindsight.*`, `auth.broker.*`, `images.urls.*`, interpreter paths, `browser.cdpUrl`, …) | Top-level YAML keys stripped from `config.yml` |
 | `machineLocalMcpFields` | string[] | `["command", "args", "env"]` | Per-server MCP fields kept local; `[]` syncs launchers verbatim |
 | `machineLocalMcpServers` | string[] | `[]` | Server names whose whole entry is machine-local |
+| `machineLocalPlugins` | string[] | `[]` | Plugin package names excluded from `plugins.json`; no sync-set warning is emitted for them |
+| `pluginsDir` | string | unset | Plugin-root override for `plugins.json` (absolute or `~`-prefixed), probed before the XDG and `dirname(agentDir)/plugins` candidates; every candidate must contain a `package.json` |
 | `preferRemote` | boolean | false | Forces `runSync` down the `runReset` path (discard local, take remote) |
 | `discardLocalOnConflict` | boolean | false | On a failed integration, reset instead of throwing |
 

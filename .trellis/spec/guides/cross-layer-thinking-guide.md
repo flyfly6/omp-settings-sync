@@ -34,6 +34,7 @@
 **2. Index and commits**
 
 - [ ] Staging happens only in `commitLocalChanges` (so tier-3 runs).
+- [ ] A synced file with no filter driver must exclude machine-local data by construction (`plugins.json`), because nothing strips it later.
 - [ ] A worktree edit that changes only machine-local fields must not create a commit.
 - [ ] Vault re-encryption is gated by `hasSensitiveChanges`.
 
