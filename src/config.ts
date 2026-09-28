@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { GhClient } from "./gh.js";
 import { DEFAULT_ALLOWED_PATHS, isDenied } from "./security.js";
 
 export interface OmpSyncConfig {
@@ -21,7 +20,6 @@ export type Level = "info" | "warning" | "error";
 
 export interface Deps {
   dir?: string;
-  gh?: GhClient;
   notify?: (message: string, level: Level) => void;
 }
 

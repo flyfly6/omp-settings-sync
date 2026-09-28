@@ -1,4 +1,3 @@
-import type { GhClient } from "./gh.js";
 export interface OmpSyncConfig {
     autoSyncIntervalMinutes?: number;
     includeHostname?: boolean;
@@ -13,7 +12,6 @@ export interface OmpSyncConfig {
 export type Level = "info" | "warning" | "error";
 export interface Deps {
     dir?: string;
-    gh?: GhClient;
     notify?: (message: string, level: Level) => void;
 }
 export interface UIContext {

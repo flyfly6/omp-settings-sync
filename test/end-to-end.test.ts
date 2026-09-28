@@ -2,25 +2,23 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { git } from "../src/git.js";
+import { git, hasDotGit } from "../src/git.js";
 import { checkAndBackgroundSync, runInit, runLink, runSync, runUnlockVault, showStatus } from "../src/sync.js";
 
 import { getVaultStatus } from "../src/vault.js";
-import { createBareRemote, createFakeGh, createMachineFixture } from "./helpers.js";
+import { createBareRemote, createMachineFixture } from "./helpers.js";
 
 test("end-to-end round trip: init machine A, link machine B, sync bidirectional changes", async () => {
   const a = await createMachineFixture("machine-a");
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
 
   // 1. Init on Machine A
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA });
+  await runInit(remote, undefined, { dir: a.dir });
 
   // 2. Link on Machine B
   const b = await createMachineFixture("machine-b");
   await fs.writeFile(path.join(b.dir, "config.yml"), "theme:\n  dark: custom-b\n");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB });
+  await runLink(remote, undefined, { dir: b.dir });
 
   // Local differing file moved to .local-backup
   assert.ok(await fs.stat(path.join(b.dir, "config.yml.local-backup")));
@@ -41,9 +39,8 @@ test("end-to-end round trip: init machine A, link machine B, sync bidirectional 
 test("checkAndBackgroundSync detects local changes and syncs them automatically", async () => {
   const a = await createMachineFixture("bg-sync-a");
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
 
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA });
+  await runInit(remote, undefined, { dir: a.dir });
 
   // No changes -> returns false
   const syncedWithoutChanges = await checkAndBackgroundSync(undefined, { dir: a.dir });
@@ -56,8 +53,7 @@ test("checkAndBackgroundSync detects local changes and syncs them automatically"
 
   // Link on Machine B and verify change was synced
   const b = await createMachineFixture("bg-sync-b");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB });
+  await runLink(remote, undefined, { dir: b.dir });
   assert.equal(
     (await fs.readFile(path.join(b.dir, "AGENTS.md"), "utf8")).replace(/\r\n/g, "\n"),
     "# Background synced changes\n"
@@ -68,18 +64,16 @@ test("encrypted vault lifecycle: init with password, link with password restores
   const a = await createMachineFixture("vault-a");
   await fs.writeFile(path.join(a.dir, "auth.json"), JSON.stringify({ token: "synced-token-123" }));
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
 
   const vaultPassphrase = "MySecretVaultPassword456!";
 
   // 1. Init on Machine A with encrypted vault
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA }, { password: vaultPassphrase });
+  await runInit(remote, undefined, { dir: a.dir }, { password: vaultPassphrase });
   assert.equal(await getVaultStatus(a.dir), "unlocked");
 
   // 2. Link on Machine B WITH password -> auth.json is restored
   const b = await createMachineFixture("vault-b");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB }, { password: vaultPassphrase });
+  await runLink(remote, undefined, { dir: b.dir }, { password: vaultPassphrase });
 
   assert.equal(await getVaultStatus(b.dir), "unlocked");
   const authB = JSON.parse(await fs.readFile(path.join(b.dir, "auth.json"), "utf8")) as { token: string };
@@ -88,7 +82,6 @@ test("encrypted vault lifecycle: init with password, link with password restores
   // 3. Link on Machine C WITHOUT password -> gracefully syncs unencrypted config, vault stays locked
   const c = await createMachineFixture("vault-c");
   await fs.writeFile(path.join(c.dir, "auth.json"), "original-c-secret");
-  const ghC = createFakeGh();
 
   let linkWarning = "";
   await runLink(
@@ -96,7 +89,6 @@ test("encrypted vault lifecycle: init with password, link with password restores
     undefined,
     {
       dir: c.dir,
-      gh: ghC,
       notify: (msg) => {
         linkWarning += msg;
       },
@@ -126,16 +118,14 @@ test("bidirectional credential sync updates auth.json between machines seamlessl
   const a = await createMachineFixture("sync-cred-a");
   await fs.writeFile(path.join(a.dir, "auth.json"), JSON.stringify({ token: "initial-token-1" }));
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
   const passphrase = "SyncCredentialsSecret123!";
 
   // 1. Machine A inits with vault
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA }, { password: passphrase });
+  await runInit(remote, undefined, { dir: a.dir }, { password: passphrase });
 
   // 2. Machine B links with vault
   const b = await createMachineFixture("sync-cred-b");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB }, { password: passphrase });
+  await runLink(remote, undefined, { dir: b.dir }, { password: passphrase });
 
   const authB1 = JSON.parse(await fs.readFile(path.join(b.dir, "auth.json"), "utf8")) as { token: string };
   assert.equal(authB1.token, "initial-token-1");
@@ -162,8 +152,7 @@ test("bidirectional credential sync updates auth.json between machines seamlessl
 test("showStatus outputs rich status with conflict detection and resolution instructions", async () => {
   const a = await createMachineFixture("status-test");
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA }, { password: "Pass" });
+  await runInit(remote, undefined, { dir: a.dir }, { password: "Pass" });
 
   let normalStatusMsg = "";
   await showStatus(undefined, {
@@ -203,17 +192,16 @@ test("showStatus outputs rich status with conflict detection and resolution inst
 test("runInit allows fresh re-initialization when remote repo is deleted or --force is specified", async () => {
   const a = await createMachineFixture("recovery-test");
   const remote1 = await createBareRemote(a.root, "remote1.git");
-  const ghA = createFakeGh();
 
   // 1. Initial setup
-  await runInit(remote1, undefined, { dir: a.dir, gh: ghA });
+  await runInit(remote1, undefined, { dir: a.dir });
 
   // 2. Simulate remote repo deleted/gone
   await fs.rm(remote1, { recursive: true, force: true });
 
   // 3. runInit with a new remote or --force succeeds without throwing 'already initialized'
   const remote2 = await createBareRemote(a.root, "remote2.git");
-  await runInit(remote2, undefined, { dir: a.dir, gh: ghA });
+  await runInit(remote2, undefined, { dir: a.dir });
 
   // Verify it can sync to the new remote
   await fs.writeFile(path.join(a.dir, "AGENTS.md"), "# Recovery Successful\n");
@@ -223,15 +211,13 @@ test("runInit allows fresh re-initialization when remote repo is deleted or --fo
 test("runReset and runSync with discardLocal forcefully discard local changes and sync remote vault", async () => {
   const a = await createMachineFixture("reset-a");
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
   const pass = "ResetPass123!";
 
   await fs.writeFile(path.join(a.dir, "auth.json"), JSON.stringify({ token: "remote-token-gold" }));
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA }, { password: pass });
+  await runInit(remote, undefined, { dir: a.dir }, { password: pass });
 
   const b = await createMachineFixture("reset-b");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB }, { password: pass });
+  await runLink(remote, undefined, { dir: b.dir }, { password: pass });
 
   // Machine B makes dirty/conflicting local changes to config and auth
   await fs.writeFile(path.join(b.dir, "AGENTS.md"), "# Stray Local PC Edits\n");
@@ -257,12 +243,10 @@ test("runReset and runSync with discardLocal forcefully discard local changes an
 test("runSync automatically reconciles and retries push on race condition", async () => {
   const a = await createMachineFixture("race-a");
   const remote = await createBareRemote(a.root);
-  const ghA = createFakeGh();
-  await runInit(remote, undefined, { dir: a.dir, gh: ghA });
+  await runInit(remote, undefined, { dir: a.dir });
 
   const b = await createMachineFixture("race-b");
-  const ghB = createFakeGh();
-  await runLink(remote, undefined, { dir: b.dir, gh: ghB });
+  await runLink(remote, undefined, { dir: b.dir });
 
   // Both make non-conflicting changes to tracked directories
   await fs.mkdir(path.join(a.dir, "skills"), { recursive: true });
@@ -282,6 +266,35 @@ test("runSync automatically reconciles and retries push on race condition", asyn
   // Both machines have both files cleanly
   assert.ok(await fs.readFile(path.join(a.dir, "skills", "skillB.md"), "utf8"));
   assert.ok(await fs.readFile(path.join(b.dir, "skills", "skillA.md"), "utf8"));
+});
+
+test("init and link demand a repository URL, and link adopts a repo left with commits but no origin", async () => {
+  const a = await createMachineFixture("no-url");
+  await assert.rejects(() => runInit("", undefined, { dir: a.dir }), /repository URL is required/);
+  await assert.rejects(() => runLink("", undefined, { dir: a.dir }), /repository URL is required/);
+  assert.equal(await hasDotGit(a.dir), false);
+
+  // Legacy partial state: local commits, no 'origin' remote
+  await git(["init", "-b", "main"], a.dir);
+  await fs.writeFile(path.join(a.dir, "AGENTS.md"), "# Local only\n");
+  await git(["add", "-A"], a.dir);
+  await git(["commit", "-m", "local only"], a.dir);
+
+  const source = await createMachineFixture("no-url-source");
+  const remote = await createBareRemote(a.root);
+  await runInit(remote, undefined, { dir: source.dir });
+
+  let linked = "";
+  await runLink(remote, undefined, { dir: a.dir, notify: (msg) => (linked += msg) });
+
+  assert.equal((await git(["remote", "get-url", "origin"], a.dir)).stdout.trim(), remote);
+  assert.match(linked, /Previous local commits kept in branch omp-local-/);
+  assert.match((await git(["branch", "--format=%(refname:short)"], a.dir)).stdout, /omp-local-/);
+  assert.equal(
+    (await fs.readFile(path.join(a.dir, "AGENTS.md"), "utf8")).replace(/\r\n/g, "\n"),
+    "# Agent Instructions\n"
+  );
+  assert.ok(await fs.stat(path.join(a.dir, "AGENTS.md.local-backup")));
 });
 
 

@@ -4,7 +4,7 @@
 [![CI](https://github.com/aaxyat/omp-settings-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/aaxyat/omp-settings-sync/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Securely sync your [Oh My Pi](https://omp.sh) (`~/.omp/agent`) configuration, session tokens, and login credentials across devices (Linux, macOS, Windows) through a private Git remote (`OhMyPiSyncData`) — automatically, with 4-tier guards keeping plaintext secrets, databases, and runtime state out.
+Securely sync your [Oh My Pi](https://omp.sh) (`~/.omp/agent`) configuration, session tokens, and login credentials across devices (Linux, macOS, Windows) through a private Git remote of your choice — automatically, with 4-tier guards keeping plaintext secrets, databases, and runtime state out.
 
 The agent directory (`~/.omp/agent` or `~/.omp/profiles/<profile>/agent`) **is** the repository, ensuring transparent version history with zero shadow staging copies.
 
@@ -18,7 +18,7 @@ The agent directory (`~/.omp/agent` or `~/.omp/profiles/<profile>/agent`) **is**
 - 💻 **Cross-Platform Compatibility:** Full native support for Windows, macOS, and Linux with robust path normalization, CRLF/LF line-ending preservation, and safe process locking.
 - 🛡️ **4-Tier Security Guards:** Inverted allowlist `.gitignore`, local `.git/info/exclude`, pre-commit staging blocker, and tracked file scanner ensuring plaintext secrets, tokens, and SQLite databases (`agent.db*`, `models.db*`, `history.db*`) are never committed.
 - ⚙️ **Dual YAML & JSON Clean/Smudge Filter:** Machine-local settings (`images.urls.credentials`, `dev.autoqaPush.token`, `searxng.*`, `hindsight.*`, `auth.broker.*`, `setupVersion`, `shellPath`, etc.) are stripped from commits and preserved in local sidecars.
-- 🚀 **Zero-Touch GitHub Setup:** Automatically creates and discovers private `OhMyPiSyncData` repositories using authenticated GitHub CLI (`gh`).
+- 🚀 **Bring Your Own Git Remote:** Any git URL works — GitHub, GitLab, or self-hosted, over SSH, HTTPS, or a local path. `/ompsync init <url>` and `/ompsync link <url>` always take the repository address explicitly; no GitHub CLI, no implicit repository creation.
 - 🔄 **Graceful Onboarding:** Linking on a new device without entering a password syncs all unencrypted configuration smoothly without errors; unlock your encrypted vault anytime via `/ompsync unlock`.
 
 ---
@@ -48,26 +48,24 @@ Place `dist/index.js` or symlink the project directory inside `~/.omp/agent/exte
 ## Quickstart
 
 ### 1. First Machine Setup
-Run:
-```text
-/ompsync init
-```
-1. It asks if you want to securely sync session tokens and credentials. If confirmed, enter a passphrase.
-2. With GitHub CLI authenticated (`gh auth login`), it creates a private `OhMyPiSyncData` repository, commits allowlisted configuration and encrypted vault, and pushes to GitHub.
-
-Without `gh`, specify a private remote:
+Create an empty private repository on your git host (GitHub, GitLab, self-hosted, or a bare path), then run:
 ```text
 /ompsync init git@github.com:you/OhMyPiSyncData.git
 ```
+`owner/repo` shorthand, full HTTPS/SSH URLs, and local paths are all accepted. The repository URL is required — nothing is inferred or created for you.
+
+1. It asks if you want to securely sync session tokens and credentials. If confirmed, enter a passphrase.
+2. It commits allowlisted configuration and the encrypted vault, then pushes to the repository you named. Make sure this machine can push to it (`ssh` key or git credential helper).
 
 ### 2. Linking on New Devices (Windows / macOS / Linux)
 On your second device, run:
 ```text
-/ompsync link
+/ompsync link git@github.com:you/OhMyPiSyncData.git
 ```
 - Enter your vault passphrase to decrypt and restore session tokens (`auth.json`).
 - **If you skip or leave the passphrase blank:** All unencrypted configuration syncs normally with zero errors. You can unlock your credentials vault anytime later.
 - Any differing local allowed files are safely preserved as `<file>.local-backup`.
+- Local commits found without an `origin` remote (from an older partial setup) are kept under an `omp-local-<timestamp>` branch before the remote is adopted.
 
 ### 3. Daily Synchronization
 Synchronization is fully automated:
@@ -81,8 +79,8 @@ Synchronization is fully automated:
 
 | Command | Description |
 | :--- | :--- |
-| `/ompsync init [url\|name]` | Initialize and push the first-machine repository (`OhMyPiSyncData`) |
-| `/ompsync link [url\|name]` | Link an existing sync repository on a new machine |
+| `/ompsync init <url>` | Initialize this machine against an existing (or empty) repository and push the first commit |
+| `/ompsync link <url>` | Link an existing sync repository on a new machine |
 | `/ompsync status` | Display repository state, branch, vault status, and security checks |
 | `/ompsync sync` | Commit, fetch, integrate remote changes (rebase), and push with progress indicator |
 | `/ompsync push` | Commit and push local changes without pulling |

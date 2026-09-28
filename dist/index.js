@@ -59,7 +59,7 @@ export default function gitSyncExtension(pi) {
                     }
                     throw new Error("Unknown vault subcommand. Usage: /ompsync vault [enable|disable|unlock|lock|status]");
                 }
-                throw new Error("Unknown command. Usage: /ompsync [init|link|status|sync|reset|push|pull|unlock|lock|vault]");
+                throw new Error("Unknown command. Usage: /ompsync [init <url>|link <url>|status|sync|reset|push|pull|unlock|lock|vault]");
             });
         }
         catch (error) {

@@ -3,14 +3,23 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { parseRepoReference } from "../src/gh.js";
+import { parseRepoReference, remoteFromArg } from "../src/remote.js";
 import { git, hasAnyChanges, hasDotGit, hasLocalChanges, isSyncableRepo } from "../src/git.js";
 
 test("parseRepoReference parses various GitHub repository URL and name shapes", () => {
-  assert.deepEqual(parseRepoReference("my-config", "user1"), { owner: "user1", name: "my-config" });
-  assert.deepEqual(parseRepoReference("org/repo", "user1"), { owner: "org", name: "repo" });
-  assert.deepEqual(parseRepoReference("git@github.com:org/repo.git", "user1"), { owner: "org", name: "repo" });
-  assert.deepEqual(parseRepoReference("https://github.com/org/repo", "user1"), { owner: "org", name: "repo" });
+  assert.deepEqual(parseRepoReference("org/repo"), { owner: "org", name: "repo" });
+  assert.deepEqual(parseRepoReference("git@github.com:org/repo.git"), { owner: "org", name: "repo" });
+  assert.deepEqual(parseRepoReference("https://github.com/org/repo"), { owner: "org", name: "repo" });
+  assert.equal(parseRepoReference("my-config"), undefined);
+});
+
+test("remoteFromArg requires an explicit repository address", () => {
+  assert.equal(remoteFromArg(""), undefined);
+  assert.equal(remoteFromArg("my-config"), undefined);
+  assert.equal(remoteFromArg("org/repo"), "https://github.com/org/repo.git");
+  assert.equal(remoteFromArg("git@github.com:org/repo.git"), "git@github.com:org/repo.git");
+  assert.equal(remoteFromArg("https://gitlab.com/org/repo.git"), "https://gitlab.com/org/repo.git");
+  assert.equal(remoteFromArg("/srv/git/config.git"), "/srv/git/config.git");
 });
 
 test("git operations execute in isolated ceiling directory and detect changes", async () => {

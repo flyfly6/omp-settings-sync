@@ -4,7 +4,7 @@ import path from "node:path";
 import type { Ctx, Deps } from "./config.js";
 import { dirOf, readConfig } from "./config.js";
 import { ensureAttributes, ensureFilter, refreshMachineSidecar } from "./filter.js";
-import { DEFAULT_SYNC_REPO_NAME, defaultGh, LIKELY_SYNC_REPO_NAMES, parseRepoReference, remoteFromArg } from "./gh.js";
+import { remoteFromArg } from "./remote.js";
 import {
   countAheadBehind,
   fetchOrigin,
@@ -149,15 +149,24 @@ export async function runInit(
   options?: { password?: string; enableVault?: boolean }
 ): Promise<void> {
   const dir = dirOf(deps);
-  await fs.mkdir(dir, { recursive: true });
-
   const isForce = /\b(--force|--fresh|-f)\b/i.test(arg);
   const cleanArg = arg.replace(/\b(--force|--fresh|-f)\b/gi, "").trim();
+
+  // Resolve the remote before touching the filesystem: a URL-less run must not leave a
+  // committed repository without an 'origin' remote behind.
+  const remote = remoteFromArg(cleanArg);
+  if (!remote) {
+    throw new Error(
+      "a git repository URL is required: /ompsync init <url> (e.g. /ompsync init git@github.com:you/omp-config.git)"
+    );
+  }
+
+  await fs.mkdir(dir, { recursive: true });
 
   if (await isSyncableRepo(dir)) {
     const reachable = await isRemoteReachable(dir);
     if (!isForce && reachable) {
-      throw new Error("already initialized with active remote; use '/ompsync sync' (or '/ompsync init --force' to start fresh)");
+      throw new Error("already initialized with active remote; use '/ompsync sync' (or '/ompsync init <url> --force' to start fresh)");
     }
     // Remote is deleted/unreachable or force requested: remove old origin
     await git(["remote", "remove", "origin"], dir).catch(() => {});
@@ -205,36 +214,16 @@ export async function runInit(
 
   await commitLocalChanges(deps, "omp config: initial sync setup", ctx);
 
-  let remote = remoteFromArg(cleanArg, "");
-  if (!remote) {
-    const gh = deps?.gh ?? defaultGh;
-    if (!(await gh.available())) {
-      notify(ctx, "omp-sync: initial commit created. Create a private repo, then run /ompsync init <url>.", "warning", deps);
-      return;
-    }
-    const owner = await gh.currentUser();
-    const ref = parseRepoReference(cleanArg || DEFAULT_SYNC_REPO_NAME, owner);
-    if (!ref) throw new Error(`invalid repository reference: ${cleanArg}`);
-    const id = `${ref.owner}/${ref.name}`;
-    if (!(await gh.repoExists(id))) {
-      await gh.createPrivateRepo(id);
-    }
-    remote = gh.remoteUrl(id);
-  }
-
-  const gh = deps?.gh ?? defaultGh;
-  if (await gh.available()) {
-    await gh.setupGit(dir);
-  }
-
   await git(["remote", "add", "origin", remote], dir);
   if (!(await pushOrigin(true, dir))) {
-    throw new Error("initial push failed");
+    throw new Error(
+      `initial push to ${remote} failed. Check that the repository exists and that this machine can push to it.`
+    );
   }
 
   notify(
     ctx,
-    `omp-sync: initialized and pushed private repository (${password ? "with encrypted vault" : "config only"}).`,
+    `omp-sync: initialized and pushed ${remote} (${password ? "with encrypted vault" : "config only"}).`,
     "info",
     deps
   );
@@ -254,6 +243,13 @@ async function safeRenameBackup(target: string, backupPath: string): Promise<voi
   try {
     await fs.rm(backupPath, { force: true });
     await fs.rename(target, backupPath);
+    return;
+  } catch {}
+  // Endpoint DLP filter drivers (and some network/overlay filesystems) refuse same-directory renames
+  // with EXDEV/EPERM; copying achieves the same result as long as the copy succeeds.
+  try {
+    await fs.copyFile(target, backupPath);
+    await fs.rm(target, { force: true });
   } catch {}
 }
 
@@ -290,6 +286,13 @@ export async function runLink(
   const isForce = /\b(--force|--fresh|-f)\b/i.test(arg);
   const cleanArg = arg.replace(/\b(--force|--fresh|-f)\b/gi, "").trim();
 
+  const remote = remoteFromArg(cleanArg);
+  if (!remote) {
+    throw new Error(
+      "a git repository URL is required: /ompsync link <url> (e.g. /ompsync link git@github.com:you/omp-config.git)"
+    );
+  }
+
   if (await isSyncableRepo(dir)) {
     const reachable = await isRemoteReachable(dir);
     if (!isForce && reachable) {
@@ -298,26 +301,14 @@ export async function runLink(
     await git(["remote", "remove", "origin"], dir).catch(() => {});
   }
 
-  const gh = deps?.gh ?? defaultGh;
-  let remote = remoteFromArg(cleanArg, "");
-  if (!remote) {
-    if (!(await gh.available())) {
-      notify(ctx, "omp-sync: provide a repo URL, or install and authenticate gh.", "warning", deps);
-      return;
-    }
-    const owner = await gh.currentUser();
-    for (const name of LIKELY_SYNC_REPO_NAMES) {
-      if (await gh.repoExists(`${owner}/${name}`)) {
-        remote = gh.remoteUrl(`${owner}/${name}`);
-        break;
-      }
-    }
-    if (!remote) throw new Error("no sync repository found; provide its URL");
-  }
-
   await fs.mkdir(dir, { recursive: true });
+
+  // A previous partial init can leave commits without an 'origin'. Keep that history reachable
+  // under a backup branch instead of refusing to link.
+  let localBackupBranch: string | undefined;
   if ((await hasDotGit(dir)) && (await hasCommits(dir))) {
-    throw new Error(`existing git history in ${dir} has no 'origin' remote; backup or clean before linking`);
+    localBackupBranch = `omp-local-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    await git(["branch", "-f", localBackupBranch], dir);
   }
 
   const config = await readConfig(deps, ctx);
@@ -329,10 +320,6 @@ export async function runLink(
   await ensureAttributes(dir);
   await ensureFilter(dir, config);
   await refreshMachineSidecar(dir, config);
-
-  if (await gh.available()) {
-    await gh.setupGit(dir);
-  }
 
   await git(["remote", "add", "origin", remote], dir);
   await git(["fetch", "origin"], dir);
@@ -423,7 +410,7 @@ export async function runLink(
     ctx,
     `omp-sync: linked — run /reload to apply pulled config.${backups.length ? ` Backed up: ${backups.join(", ")}.` : ""}${
       vaultDecrypted ? " (Vault restored)" : ""
-    }`,
+    }${localBackupBranch ? ` Previous local commits kept in branch ${localBackupBranch}.` : ""}`,
     "info",
     deps
   );
@@ -432,7 +419,7 @@ export async function runLink(
 export async function showStatus(ctx: Ctx, deps?: Deps): Promise<void> {
   const dir = dirOf(deps);
   if (!(await isSyncableRepo(dir))) {
-    notify(ctx, `omp-sync: ${dir} is not initialized. Run /ompsync init.`, "warning", deps);
+    notify(ctx, `omp-sync: ${dir} is not initialized. Run /ompsync init <url>.`, "warning", deps);
     return;
   }
 
@@ -521,7 +508,7 @@ export async function showStatus(ctx: Ctx, deps?: Deps): Promise<void> {
 export async function runReset(ctx: Ctx, deps?: Deps): Promise<void> {
   const dir = dirOf(deps);
   if (!(await isSyncableRepo(dir))) {
-    throw new Error(`no git repo in ${dir}. Run /ompsync init.`);
+    throw new Error(`no git repo in ${dir}. Run /ompsync init <url>.`);
   }
 
   updateSyncProgress(ctx, 20, "Fetching remote repository...");
@@ -579,7 +566,7 @@ export async function runSync(
   const dir = dirOf(deps);
   if (!(await isSyncableRepo(dir))) {
     if (!options.auto) {
-      notify(ctx, `omp-sync: no git repo with an 'origin' remote in ${dir}. Run /ompsync init.`, "warning", deps);
+      notify(ctx, `omp-sync: no git repo with an 'origin' remote in ${dir}. Run /ompsync init <url>.`, "warning", deps);
     }
     return;
   }
@@ -613,7 +600,7 @@ export async function runSync(
         if (!reachable) {
           notify(
             ctx,
-            "omp-sync: remote repository is unreachable or was deleted on GitHub. Run '/ompsync init' to recreate it.",
+            "omp-sync: remote repository is unreachable or no longer exists. Run '/ompsync init <url>' to point at another repository.",
             "warning",
             deps
           );

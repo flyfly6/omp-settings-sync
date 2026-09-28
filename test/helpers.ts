@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { GhClient } from "../src/gh.js";
 
 process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = "omp-settings-sync tests";
 process.env.GIT_AUTHOR_EMAIL = process.env.GIT_COMMITTER_EMAIL = "tests@omp-settings-sync.invalid";
@@ -40,37 +39,4 @@ export async function createBareRemote(root: string, name = "origin.git"): Promi
   const repo = path.join(root, name);
   await sh("git", ["init", "--bare", "-b", "main", repo]);
   return repo;
-}
-
-export function createFakeGh(overrides: Partial<GhClient> = {}): GhClient & { calls: string[] } {
-  const calls: string[] = [];
-  return {
-    calls,
-    async available() {
-      calls.push("available");
-      return true;
-    },
-    async currentUser() {
-      calls.push("currentUser");
-      return "omp-tester";
-    },
-    async repoExists(id: string) {
-      calls.push(`exists:${id}`);
-      return false;
-    },
-    async isPrivate(id: string) {
-      calls.push(`isPrivate:${id}`);
-      return true;
-    },
-    async createPrivateRepo(id: string) {
-      calls.push(`create:${id}`);
-    },
-    remoteUrl(id: string) {
-      return `https://github.com/${id}.git`;
-    },
-    async setupGit() {
-      calls.push("setupGit");
-    },
-    ...overrides,
-  };
 }
